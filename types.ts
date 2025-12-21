@@ -14,6 +14,12 @@ export interface AnalysisResult {
   color: string;
   makeModel: string;
   description: string;
+  // Owner information (optional - only present if vehicle is registered)
+  owner?: {
+    name: string;
+    info: string;
+    photo: string;
+  };
 }
 
 export interface TollRecord extends AnalysisResult {

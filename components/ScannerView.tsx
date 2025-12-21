@@ -183,7 +183,15 @@ export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedIma
         <div className="bg-zinc-900 rounded-xl p-5 border border-zinc-800 shadow-xl animate-in slide-in-from-bottom-4 duration-500">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <p className="text-xs font-semibold text-blue-400 uppercase tracking-widest mb-1">Detection Result</p>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-xs font-semibold text-blue-400 uppercase tracking-widest">Detection Result</p>
+                {lastResult.owner && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                    <Check size={10} />
+                    REGISTERED
+                  </span>
+                )}
+              </div>
               <h2 className="text-2xl font-bold font-mono text-white tracking-tight">{lastResult.licensePlate}</h2>
             </div>
             <div className={`px-3 py-1 rounded-full text-xs font-bold border ${lastResult.confidence > 0.85 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
@@ -206,6 +214,32 @@ export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedIma
               </div>
             </div>
           </div>
+
+          {/* Owner Information Section */}
+          {lastResult.owner && (
+            <div className="mt-4 p-4 bg-gradient-to-br from-emerald-500/5 to-emerald-600/5 rounded-lg border border-emerald-500/20">
+              <p className="text-xs font-semibold text-emerald-400 uppercase tracking-widest mb-3">Registered Owner</p>
+              <div className="flex items-center gap-4">
+                {lastResult.owner.photo && (
+                  <div className="w-16 h-16 rounded-full overflow-hidden bg-zinc-800 border-2 border-emerald-500/30 flex-shrink-0">
+                    <img
+                      src={lastResult.owner.photo}
+                      alt={lastResult.owner.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        // Fallback if image fails to load
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-base font-bold text-white mb-1">{lastResult.owner.name}</p>
+                  <p className="text-sm text-zinc-400 truncate">{lastResult.owner.info}</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="mt-6 flex justify-center">
             <button
