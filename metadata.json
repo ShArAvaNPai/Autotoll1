@@ -1,0 +1,4 @@
+{
+  "name": "AutoToll AI",
+  "description": "An intelligent automated toll collection system using Gemini Vision to recognize vehicle types and license plates from images, calculating tolls instantly."
+}
