@@ -1,8 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Camera, X, Play, Square, Loader2, AlertTriangle, IndianRupee, ScanLine } from 'lucide-react';
+import { Camera, X, Play, Square, Loader2, AlertTriangle, ScanLine } from 'lucide-react';
 import { analyzeVehicleImageLocal } from '../services/api';
-import { AnalysisResult, VehicleType, TollRate } from '../types';
-import { TOLL_RATES as DEFAULT_RATES } from '../constants';
+import { AnalysisResult } from '../types';
 
 export function RealtimeDetectionView() {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -103,8 +102,8 @@ export function RealtimeDetectionView() {
                 <button
                     onClick={() => setIsActive(!isActive)}
                     className={`px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-all ${isActive
-                            ? 'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20'
-                            : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/20'
+                        ? 'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20'
+                        : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/20'
                         }`}
                 >
                     {isActive ? (
