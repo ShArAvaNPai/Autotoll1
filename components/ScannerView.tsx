@@ -7,9 +7,10 @@ interface ScannerViewProps {
   isAnalyzing: boolean;
   lastResult: AnalysisResult | null;
   lastScannedImage?: string | null;
+  onClear?: () => void;
 }
 
-export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedImage }: ScannerViewProps) {
+export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedImage, onClear }: ScannerViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -95,8 +96,31 @@ export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedIma
     return () => stopCamera();
   }, []);
 
+  const [isDiscarding, setIsDiscarding] = useState(false);
+
+  const handleDiscard = async () => {
+    if (!lastResult?.id) return;
+    if (!window.confirm("Discard this detection? It will be removed from history.")) return;
+
+    setIsDiscarding(true);
+    try {
+      const res = await fetch(`http://localhost:8000/api/detections/${lastResult.id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        setPreview(null);
+        onClear?.();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsDiscarding(false);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col gap-4">
+      {/* ... (upload area) ... */}
       <div className={`flex-1 relative rounded-2xl border-2 transition-all overflow-hidden bg-zinc-950 shadow-xl flex flex-col items-center justify-center
         ${dragActive ? 'border-blue-500 bg-blue-500/10' : 'border-dashed border-zinc-800'}`}
         onDragEnter={handleDrag}
@@ -241,13 +265,24 @@ export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedIma
             </div>
           )}
 
-          <div className="mt-6 flex justify-center">
+          <div className="mt-6 flex gap-3">
             <button
-              onClick={() => setPreview(null)}
-              className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg border border-zinc-700 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+              onClick={handleDiscard}
+              disabled={isDiscarding}
+              className="flex-1 py-2.5 bg-zinc-950 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 rounded-lg border border-zinc-800 hover:border-red-500/20 transition-all flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50"
             >
-              <Upload size={14} />
-              Scan New Image
+              <X size={14} />
+              Discard
+            </button>
+            <button
+              onClick={() => {
+                setPreview(null);
+                onClear?.();
+              }}
+              className="flex-[2] py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+            >
+              <Check size={14} />
+              Scan Next
             </button>
           </div>
         </div>

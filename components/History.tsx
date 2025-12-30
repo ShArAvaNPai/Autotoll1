@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Car, AlertTriangle, User, RefreshCw } from 'lucide-react';
+import { Clock, Car, AlertTriangle, User, RefreshCw, Trash2 } from 'lucide-react';
 
 const API_BASE = "http://localhost:8000";
 
@@ -42,6 +42,20 @@ export function History({ onRegister }: HistoryProps) {
         }
     };
 
+    const handleDiscard = async (id: number) => {
+        if (!window.confirm("Are you sure you want to delete this record?")) return;
+        try {
+            const res = await fetch(`${API_BASE}/api/detections/${id}`, {
+                method: 'DELETE'
+            });
+            if (res.ok) {
+                fetchHistory();
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleString();
     };
@@ -70,12 +84,13 @@ export function History({ onRegister }: HistoryProps) {
                             <th className="p-4 font-medium">License Plate</th>
                             <th className="p-4 font-medium">Status</th>
                             <th className="p-4 font-medium">Confidence</th>
+                            <th className="p-4 font-medium text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-900 text-sm">
                         {logs.length === 0 ? (
                             <tr>
-                                <td colSpan={5} className="p-8 text-center text-zinc-500 italic">
+                                <td colSpan={6} className="p-8 text-center text-zinc-500 italic">
                                     No detections recorded yet.
                                 </td>
                             </tr>
@@ -83,7 +98,7 @@ export function History({ onRegister }: HistoryProps) {
                             logs.map(log => {
                                 const isAuth = log.is_authorized === 1;
                                 return (
-                                    <tr key={log.id} className="hover:bg-zinc-800/30 transition-colors">
+                                    <tr key={log.id} className="group hover:bg-zinc-800/30 transition-colors">
                                         <td className="p-4 text-zinc-400 flex items-center gap-2">
                                             <Clock size={14} />
                                             {formatDate(log.timestamp)}
@@ -130,6 +145,15 @@ export function History({ onRegister }: HistoryProps) {
                                         </td>
                                         <td className="p-4 text-zinc-400">
                                             {(parseFloat(log.confidence) * 100).toFixed(0)}%
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <button
+                                                onClick={() => handleDiscard(log.id)}
+                                                className="p-2 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                                                title="Delete record"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
                                         </td>
                                     </tr>
                                 );

@@ -14,13 +14,22 @@ interface Detection {
     image_path?: string;
 }
 
-export function ReviewQueue() {
+interface ReviewQueueProps {
+    onProcessed?: () => void;
+}
+
+export function ReviewQueue({ onProcessed }: ReviewQueueProps) {
     const [queue, setQueue] = useState<Detection[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         loadQueue();
     }, []);
+
+    const handleItemProcessed = () => {
+        loadQueue();
+        onProcessed?.();
+    };
 
     const loadQueue = async () => {
         try {
@@ -55,7 +64,7 @@ export function ReviewQueue() {
             ) : (
                 <div className="grid gap-6">
                     {queue.map(item => (
-                        <ReviewCard key={item.id} item={item} onProcessed={loadQueue} />
+                        <ReviewCard key={item.id} item={item} onProcessed={handleItemProcessed} />
                     ))}
                 </div>
             )}
@@ -83,6 +92,24 @@ const ReviewCard: React.FC<ReviewCardProps> = ({ item, onProcessed }) => {
             const res = await fetch(`${API_BASE}/api/detections/${item.id}`, {
                 method: 'PUT',
                 body: formData
+            });
+
+            if (res.ok) {
+                onProcessed();
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleDiscard = async () => {
+        if (!window.confirm("Are you sure you want to discard this detection?")) return;
+        setSubmitting(true);
+        try {
+            const res = await fetch(`${API_BASE}/api/detections/${item.id}`, {
+                method: 'DELETE'
             });
 
             if (res.ok) {
@@ -157,7 +184,11 @@ const ReviewCard: React.FC<ReviewCardProps> = ({ item, onProcessed }) => {
                 </div>
 
                 <div className="pt-2 flex justify-end gap-3">
-                    <button className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors">
+                    <button
+                        onClick={handleDiscard}
+                        disabled={submitting}
+                        className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors disabled:opacity-50"
+                    >
                         Discard
                     </button>
                     <button

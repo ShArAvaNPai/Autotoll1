@@ -12,7 +12,7 @@ import { ReviewQueue } from './components/ReviewQueue';
 import { analyzeVehicleImageLocal as analyzeVehicleImage } from './services/api';
 import { AnalysisResult, TollRecord, VehicleType, TollRate } from './types';
 import { TOLL_RATES as DEFAULT_RATES } from './constants';
-import { v4 as uuidv4 } from 'uuid'; // Actually we will just use crypto.randomUUID for cleaner dep-less code in this env
+// No external uuid import needed, using crypto or d.id
 
 export default function App() {
   const [history, setHistory] = useState<TollRecord[]>([]);
@@ -22,17 +22,82 @@ export default function App() {
   const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'settings' | 'registry' | 'history' | 'review' | 'realtime'>('dashboard');
   const [tollRates, setTollRates] = useState<TollRate>(DEFAULT_RATES);
   const [registryInitialPlate, setRegistryInitialPlate] = useState<string>('');
+  const [summary, setSummary] = useState({
+    total_vehicles: 0,
+    total_revenue: 0,
+    avg_confidence: 0,
+    pending_review: 0
+  });
+
+  const fetchSummary = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/api/summary');
+      if (res.ok) {
+        setSummary(await res.json());
+      }
+    } catch (e) {
+      console.error("Failed to fetch summary", e);
+    }
+  };
+
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/api/history');
+      if (res.ok) {
+        const data = await res.json();
+        const mappedRecords: TollRecord[] = data.map((d: any) => {
+          let timestamp = Date.now();
+          try {
+            const dateStr = d.timestamp.endsWith('Z') ? d.timestamp : d.timestamp + 'Z';
+            timestamp = new Date(dateStr).getTime();
+            if (isNaN(timestamp)) {
+              // Fallback for tricky formats
+              timestamp = new Date(d.timestamp).getTime() || Date.now();
+            }
+          } catch (e) {
+            console.error("Date parse error", e);
+          }
+
+          return {
+            id: d.id.toString(),
+            timestamp,
+            vehicleType: (d.vehicle_type as VehicleType) || VehicleType.Unknown,
+            licensePlate: d.license_plate || 'UNKNOWN',
+            confidence: parseFloat(d.confidence) || 0,
+            tollAmount: d.toll_amount || 0,
+            imageUrl: d.image_path ? `http://localhost:8000${d.image_path}` : '',
+            status: d.status === 'verified' ? 'processed' : 'manual_review',
+            color: 'Detected',
+            makeModel: d.make_model || `Detected ${d.vehicle_type || 'Vehicle'}`,
+            description: d.description || `A ${d.vehicle_type?.toLowerCase() || 'vehicle'} detected.`
+          };
+        });
+        setHistory(mappedRecords);
+      }
+    } catch (e) {
+      console.error("Failed to fetch history", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchHistory();
+    fetchSummary();
+    const interval = setInterval(() => {
+      fetchHistory();
+      fetchSummary();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleRegisterFromHistory = (plate: string) => {
     setRegistryInitialPlate(plate);
     setCurrentView('registry');
   };
 
-  const totalVehicles = history.length;
-  const totalRevenue = history.reduce((acc, curr) => acc + curr.tollAmount, 0);
-  const avgConfidence = totalVehicles > 0
-    ? (history.reduce((acc, curr) => acc + curr.confidence, 0) / totalVehicles * 100).toFixed(1)
-    : "0";
+  const totalVehicles = summary.total_vehicles;
+  const totalRevenue = summary.total_revenue;
+  const avgConfidence = summary.avg_confidence;
+  const pendingReviewCount = summary.pending_review;
 
   const handleAnalyze = async (file: File) => {
     setIsAnalyzing(true);
@@ -53,29 +118,23 @@ export default function App() {
       setCurrentScanImage(base64Image); // Store image for persistence
 
       const result = await analyzeVehicleImage(file);
-
       setCurrentResult(result);
 
-      // Create new record
-      // Use dynamic toll rates from state
-      const tollAmount = tollRates[result.vehicleType] || tollRates[VehicleType.Unknown] || 10;
-
-      const newRecord: TollRecord = {
-        ...result,
-        id: crypto.randomUUID(),
-        timestamp: Date.now(),
-        tollAmount,
-        imageUrl: base64Image, // In a real app, upload to storage and store URL
-        status: result.confidence > 0.7 ? 'processed' : 'manual_review'
-      };
-
-      setHistory(prev => [newRecord, ...prev]);
+      // Refresh history and summary from backend immediately
+      await Promise.all([fetchHistory(), fetchSummary()]);
 
     } catch (error) {
       console.error("Failed to process", error);
     } finally {
       setIsAnalyzing(false);
     }
+  };
+
+  const handleClear = () => {
+    setCurrentResult(null);
+    setCurrentScanImage(null);
+    fetchHistory();
+    fetchSummary();
   };
 
   return (
@@ -226,7 +285,7 @@ export default function App() {
                 />
                 <StatsCard
                   title="Pending Review"
-                  value={history.filter(h => h.status === 'manual_review').length}
+                  value={pendingReviewCount}
                   icon={Activity}
                   trend="Requires attention"
                   color="amber"
@@ -242,6 +301,7 @@ export default function App() {
                     isAnalyzing={isAnalyzing}
                     lastResult={currentResult}
                     lastScannedImage={currentScanImage}
+                    onClear={handleClear}
                   />
                 </div>
 
@@ -253,7 +313,7 @@ export default function App() {
 
             </div>
           ) : currentView === 'analytics' ? (
-            <AnalyticsView history={history} />
+            <AnalyticsView />
           ) : currentView === 'registry' ? (
             <Registry initialPlate={registryInitialPlate} />
           ) : currentView === 'history' ? (
@@ -261,7 +321,10 @@ export default function App() {
           ) : currentView === 'realtime' ? (
             <RealtimeDetectionView />
           ) : currentView === 'review' ? (
-            <ReviewQueue />
+            <ReviewQueue onProcessed={() => {
+              fetchHistory();
+              fetchSummary();
+            }} />
           ) : (
             <SettingsView
               currentRates={tollRates}

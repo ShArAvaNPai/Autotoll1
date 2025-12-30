@@ -13,6 +13,8 @@ import os
 import shutil
 import uuid
 import datetime
+from sqlalchemy import func, Float
+import sqlalchemy
 
 # Import Database Models
 from database import SessionLocal, engine, init_db, Owner, Vehicle, Detection
@@ -181,6 +183,89 @@ async def register_full(
 def get_history(db: Session = Depends(get_db)):
     return db.query(Detection).order_by(Detection.timestamp.desc()).limit(50).all()
 
+@app.get("/api/summary")
+def get_summary(db: Session = Depends(get_db)):
+    total_vehicles = db.query(func.count(Detection.id)).scalar() or 0
+    total_revenue = db.query(func.sum(Detection.toll_amount)).scalar() or 0
+    
+    # Average confidence (convert string confidence to float if necessary, 
+    # but the model saves it as string in database.py, so we cast)
+    avg_confidence = db.query(func.avg(Detection.confidence.cast(Float))).scalar() or 0
+    
+    pending_review = db.query(func.count(Detection.id)).filter(Detection.status == 'pending_review').scalar() or 0
+    
+    return {
+        "total_vehicles": total_vehicles,
+        "total_revenue": float(total_revenue),
+        "avg_confidence": round(float(avg_confidence) * 100, 1),
+        "pending_review": pending_review
+    }
+
+@app.get("/api/analytics")
+def get_analytics(db: Session = Depends(get_db)):
+    # 1. Revenue and Volume by Day (Past 7 Days)
+    today = datetime.datetime.utcnow().date()
+    seven_days_ago = today - datetime.timedelta(days=7)
+    
+    daily_stats = db.query(
+        func.date(Detection.timestamp).label('date'),
+        func.sum(Detection.toll_amount).label('revenue'),
+        func.count(Detection.id).label('volume')
+    ).filter(Detection.timestamp >= seven_days_ago).group_by(func.date(Detection.timestamp)).all()
+    
+    revenue_trend = []
+    for d in range(7, -1, -1):
+        day = today - datetime.timedelta(days=d)
+        day_str = day.isoformat()
+        match = next((item for item in daily_stats if item.date == day_str), None)
+        revenue_trend.append({
+            "date": day_str,
+            "revenue": match.revenue if match else 0,
+            "volume": match.volume if match else 0
+        })
+
+    # 2. Hourly Traffic (Current Day)
+    hourly_stats = db.query(
+        func.strftime('%H', Detection.timestamp).label('hour'),
+        func.count(Detection.id).label('count')
+    ).filter(func.date(Detection.timestamp) == today.isoformat()).group_by(func.strftime('%H', Detection.timestamp)).all()
+    
+    hourly_traffic = []
+    for h in range(24):
+        hour_str = f"{h:02d}"
+        match = next((item for item in hourly_stats if item.hour == hour_str), None)
+        hourly_traffic.append({
+            "hour": f"{hour_str}:00",
+            "count": match.count if match else 0
+        })
+
+    # 3. Vehicle Type Distribution
+    type_stats = db.query(
+        Detection.vehicle_type,
+        func.count(Detection.id).label('count')
+    ).group_by(Detection.vehicle_type).all()
+    
+    vehicle_distribution = [
+        {"type": t.vehicle_type, "value": t.count} for t in type_stats
+    ]
+
+    # 4. Summary Metrics
+    total_stats = db.query(
+        func.sum(Detection.toll_amount).label('total_revenue'),
+        func.count(Detection.id).label('total_vehicles')
+    ).first()
+
+    return {
+        "revenueTrend": revenue_trend,
+        "hourlyTraffic": hourly_traffic,
+        "vehicleDistribution": vehicle_distribution,
+        "summary": {
+            "totalRevenue": total_stats.total_revenue or 0,
+            "totalVehicles": total_stats.total_vehicles or 0,
+            "avgRevenue": (total_stats.total_revenue / total_stats.total_vehicles) if total_stats.total_vehicles and total_stats.total_vehicles > 0 else 0
+        }
+    }
+
 @app.get("/api/review_queue")
 def get_review_queue(db: Session = Depends(get_db)):
     return db.query(Detection).filter(Detection.status == 'pending_review').order_by(Detection.timestamp.desc()).all()
@@ -203,6 +288,26 @@ def update_detection(
     db.commit()
     db.refresh(detection)
     return detection
+
+@app.delete("/api/detections/{detection_id}")
+def delete_detection(detection_id: int, db: Session = Depends(get_db)):
+    detection = db.query(Detection).filter(Detection.id == detection_id).first()
+    if not detection:
+        raise HTTPException(status_code=404, detail="Detection not found")
+    
+    # Delete image file if it exists
+    if detection.image_path:
+        filename = os.path.basename(detection.image_path)
+        full_path = os.path.join(UPLOAD_DIR, filename)
+        if os.path.exists(full_path):
+            try:
+                os.remove(full_path)
+            except Exception as e:
+                print(f"Error deleting file: {e}")
+
+    db.delete(detection)
+    db.commit()
+    return {"status": "success"}
 
 # --- Analysis Endpoint ---
 
@@ -238,18 +343,68 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
                         vehicle_type = coco_map[cls_id]
 
         # OCR for License Plate
-        ocr_result = reader.readtext(img_cv, detail=0)
-        license_plate = "UNKNOWN"
-        best_plate_score = 0
-        for text in ocr_result:
+        ocr_result = reader.readtext(img_cv, detail=1)
+        
+        candidates = []
+        for (bbox, text, prob) in ocr_result:
             clean_text = ''.join(e for e in text if e.isalnum()).upper()
-            if 4 <= len(clean_text) <= 10:
-                score = 0
-                if any(c.isdigit() for c in clean_text): score += 1
-                if any(c.isalpha() for c in clean_text): score += 1
-                if score > best_plate_score:
-                    best_plate_score = score
-                    license_plate = clean_text
+            if 2 <= len(clean_text) <= 10:
+                # Calculate center and height
+                cx = sum([p[0] for p in bbox]) / 4
+                cy = sum([p[1] for p in bbox]) / 4
+                min_y = min([p[1] for p in bbox])
+                max_y = max([p[1] for p in bbox])
+                h = max_y - min_y
+                candidates.append({
+                    'text': clean_text,
+                    'cx': cx,
+                    'cy': cy,
+                    'h': h,
+                    'prob': prob
+                })
+
+        license_plate = "UNKNOWN"
+        if candidates:
+            # Sort by Y position
+            candidates.sort(key=lambda x: x['cy'])
+            
+            # Simple grouping logic: merge segments that are horizontally aligned and vertically close
+            merged_results = []
+            used_indices = set()
+            
+            for i in range(len(candidates)):
+                if i in used_indices: continue
+                
+                current_group = [candidates[i]]
+                used_indices.add(i)
+                
+                # Look for segments below this one that align horizontally
+                for j in range(i + 1, len(candidates)):
+                    if j in used_indices: continue
+                    
+                    # Heuristic: cx is close, and vertical distance is reasonable
+                    if abs(candidates[j]['cx'] - candidates[i]['cx']) < 50 and \
+                       abs(candidates[j]['cy'] - candidates[i]['cy']) < candidates[i]['h'] * 2.5:
+                        current_group.append(candidates[j])
+                        used_indices.add(j)
+                
+                # Combine text in the group (already sorted by cy)
+                merged_text = "".join([c['text'] for c in current_group])
+                merged_results.append(merged_text)
+            
+            # Pick the best merged result that looks like a plate
+            best_plate = "UNKNOWN"
+            best_score = 0
+            for plate in merged_results:
+                if 4 <= len(plate) <= 12:
+                    score = 0
+                    if any(c.isdigit() for c in plate): score += 1
+                    if any(c.isalpha() for c in plate): score += 1
+                    if score >= best_score:
+                        best_score = score
+                        best_plate = plate
+            
+            license_plate = best_plate
 
         # Save the image for Review Queue / History
         file_extension = "jpg" # Defaulting for simplicity, or could parse from filename if needed but we read content
@@ -301,6 +456,7 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
 
         # Build Response
         response_data = {
+            "id": new_detection.id,
             "vehicleType": vehicle_type,
             "licensePlate": license_plate,
             "confidence": confidence,
@@ -337,4 +493,4 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
         }
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

@@ -8,6 +8,7 @@ export enum VehicleType {
 }
 
 export interface AnalysisResult {
+  id?: number | string;
   vehicleType: VehicleType;
   licensePlate: string;
   confidence: number;

@@ -1,7 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Camera, X, Play, Square, Loader2, AlertTriangle, ScanLine } from 'lucide-react';
+import { Camera, X, Play, Square, Loader2, AlertTriangle, ScanLine, IndianRupee } from 'lucide-react';
 import { analyzeVehicleImageLocal } from '../services/api';
-import { AnalysisResult } from '../types';
+import { AnalysisResult, VehicleType } from '../types';
+import { TOLL_RATES as DEFAULT_RATES } from '../constants';
 
 export function RealtimeDetectionView() {
     const videoRef = useRef<HTMLVideoElement>(null);
