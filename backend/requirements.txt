@@ -6,4 +6,5 @@ pillow
 easyocr
 opencv-python-headless
 sqlalchemy
-python-multipart
+pandas
+openpyxl

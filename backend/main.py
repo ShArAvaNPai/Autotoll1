@@ -15,6 +15,7 @@ import uuid
 import datetime
 from sqlalchemy import func, Float
 import sqlalchemy
+import pandas as pd
 
 # Import Database Models
 from database import SessionLocal, engine, init_db, Owner, Vehicle, Detection
@@ -308,6 +309,99 @@ def delete_detection(detection_id: int, db: Session = Depends(get_db)):
     db.delete(detection)
     db.commit()
     return {"status": "success"}
+
+@app.get("/api/vehicle/status/{license_plate}")
+def get_vehicle_status(license_plate: str, db: Session = Depends(get_db)):
+    vehicle = db.query(Vehicle).filter(Vehicle.license_plate == license_plate.upper()).first()
+    
+    # Get all detections for this plate (verified and pending)
+    # Note: Using relaxed matching logic similar to history
+    detections = db.query(Detection).filter(
+        (Detection.license_plate == license_plate.upper()) |
+        (Detection.known_vehicle_id == (vehicle.id if vehicle else -1))
+    ).all()
+
+    total_due = sum(d.toll_amount for d in detections)
+    
+    return {
+        "found": vehicle is not None,
+        "vehicle": vehicle,
+        "owner": vehicle.owner if vehicle else None,
+        "total_due": total_due,
+        "history_count": len(detections)
+    }
+
+@app.post("/api/import")
+async def import_data(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    try:
+        contents = await file.read()
+        df = None
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(contents))
+        elif file.filename.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(io.BytesIO(contents))
+        else:
+            raise HTTPException(status_code=400, detail="Invalid file type. Only CSV and Excel are supported.")
+
+        required_columns = ['Full Name', 'Contact Info', 'License Plate', 'Make & Model']
+        # Normalize columns (case insensitive, strip whitespace)
+        df.columns = [c.strip() for c in df.columns]
+        
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise HTTPException(status_code=400, detail=f"Missing columns: {', '.join(missing_columns)}")
+
+        success_count = 0
+        error_count = 0
+        errors = []
+
+        for index, row in df.iterrows():
+            try:
+                name = str(row['Full Name']).strip()
+                contact = str(row['Contact Info']).strip()
+                plate = str(row['License Plate']).strip().upper()
+                model = str(row['Make & Model']).strip()
+
+                if not name or not plate:
+                    continue
+
+                # Check if plate exists
+                existing_vehicle = db.query(Vehicle).filter(Vehicle.license_plate == plate).first()
+                if existing_vehicle:
+                    error_count += 1
+                    errors.append(f"Row {index+2}: Plate {plate} already exists")
+                    continue
+
+                # Create Owner (Check if owner with same name and contact exists to avoid duplicates?)
+                # For now, let's just create a new owner for simplicity as per standard registry behavior
+                new_owner = Owner(name=name, contact_info=contact, photo_path="")
+                db.add(new_owner)
+                db.flush()
+
+                new_vehicle = Vehicle(
+                    license_plate=plate,
+                    make_model=model,
+                    owner_id=new_owner.id
+                )
+                db.add(new_vehicle)
+                success_count += 1
+            except Exception as e:
+                error_count += 1
+                errors.append(f"Row {index+2}: {str(e)}")
+
+        db.commit()
+        return {
+            "status": "success",
+            "imported": success_count,
+            "failed": error_count,
+            "errors": errors[:10] # Return first 10 errors
+        }
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"Import error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- Analysis Endpoint ---
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Car, Upload, Save, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { User, Car, Upload, Save, CheckCircle, AlertCircle, Clock, Search, FileUp } from 'lucide-react';
 
 const API_BASE = "http://localhost:8000";
 
@@ -37,6 +37,8 @@ export function Registry({ initialPlate }: RegistryProps) {
     const [photo, setPhoto] = useState<File | null>(null);
 
     const [status, setStatus] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [importing, setImporting] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -128,6 +130,47 @@ export function Registry({ initialPlate }: RegistryProps) {
             }
         }
     };
+
+    const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setImporting(true);
+        setStatus(null);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const res = await fetch(`${API_BASE}/api/import`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setStatus({
+                    type: 'success',
+                    text: `Import complete: ${data.imported} success, ${data.failed} failed.`
+                });
+                loadData();
+            } else {
+                const err = await res.json();
+                setStatus({ type: 'error', text: err.detail || "Import failed" });
+            }
+        } catch (e) {
+            setStatus({ type: 'error', text: "Network error during import" });
+        } finally {
+            setImporting(false);
+            // Clear input
+            e.target.value = '';
+        }
+    };
+
+    const filteredVehicles = vehicles.filter(v =>
+        v.license_plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        v.owner_name?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     return (
         <div className="max-w-5xl mx-auto py-8 space-y-12">
@@ -225,13 +268,39 @@ export function Registry({ initialPlate }: RegistryProps) {
 
                 {/* List View */}
                 <div className="lg:col-span-7 border-l border-zinc-800 lg:pl-12 space-y-6">
-                    <h3 className="text-lg font-medium text-zinc-300">Database</h3>
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-lg font-medium text-zinc-300">Database</h3>
+                        <div className="flex items-center gap-3">
+                            <label className={`cursor-pointer flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-colors ${importing ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20'}`}>
+                                <FileUp size={14} />
+                                {importing ? 'Importing...' : 'Import CSV/Excel'}
+                                <input
+                                    type="file"
+                                    className="hidden"
+                                    accept=".csv, .xlsx, .xls"
+                                    onChange={handleImport}
+                                    disabled={importing}
+                                />
+                            </label>
+                        </div>
+                    </div>
+
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
+                        <input
+                            type="text"
+                            placeholder="Search by plate or owner..."
+                            className="w-full bg-zinc-900/50 border border-zinc-800 rounded-lg py-2 pl-10 pr-4 text-sm text-zinc-300 focus:outline-none focus:border-zinc-700 transition-colors placeholder:text-zinc-600"
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                        />
+                    </div>
 
                     <div className="space-y-2">
-                        {vehicles.length === 0 ? (
+                        {filteredVehicles.length === 0 ? (
                             <p className="text-zinc-600 font-light italic">No entries found.</p>
                         ) : (
-                            vehicles.map(v => (
+                            filteredVehicles.map(v => (
                                 <div key={v.id} className="group flex flex-col justify-between py-4 border-b border-zinc-900 hover:bg-zinc-900/50 px-4 -mx-4 rounded transition-colors">
                                     <div className="flex items-center justify-between w-full">
                                         <div className="flex items-center gap-4">

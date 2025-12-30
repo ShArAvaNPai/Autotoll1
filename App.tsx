@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { AnalyticsView } from './components/AnalyticsView';
 import { SettingsView } from './components/SettingsView';
 import { RealtimeDetectionView } from './components/RealtimeDetectionView';
-import { LayoutDashboard, Car, IndianRupee, Activity, Settings, Bell, User, Clock, FileCheck, ScanLine } from 'lucide-react';
+import { LayoutDashboard, Car, IndianRupee, Activity, Settings, Bell, User, Clock, FileCheck, ScanLine, LogOut } from 'lucide-react';
 import { StatsCard } from './components/StatsCard';
+import { LoginView } from './components/LoginView';
+import { VehicleOwnerView } from './components/VehicleOwnerView';
 import { HistoryTable } from './components/HistoryTable';
 import { ScannerView } from './components/ScannerView';
 import { Registry } from './components/Registry';
@@ -19,6 +21,7 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentResult, setCurrentResult] = useState<AnalysisResult | null>(null);
   const [currentScanImage, setCurrentScanImage] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<'admin' | 'owner' | null>(null);
   const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'settings' | 'registry' | 'history' | 'review' | 'realtime'>('dashboard');
   const [tollRates, setTollRates] = useState<TollRate>(DEFAULT_RATES);
   const [registryInitialPlate, setRegistryInitialPlate] = useState<string>('');
@@ -137,6 +140,14 @@ export default function App() {
     fetchSummary();
   };
 
+  if (!userRole) {
+    return <LoginView onLogin={setUserRole} />;
+  }
+
+  if (userRole === 'owner') {
+    return <VehicleOwnerView onBack={() => setUserRole(null)} />;
+  }
+
   return (
     <div className="flex h-screen bg-black text-zinc-100 overflow-hidden">
       {/* Sidebar */}
@@ -253,6 +264,14 @@ export default function App() {
             <Bell size={20} />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-600 rounded-full border-2 border-black"></span>
           </button>
+
+          <button
+            onClick={() => setUserRole(null)}
+            className="p-2 text-zinc-500 hover:text-red-400 transition-colors ml-2"
+            title="Sign Out"
+          >
+            <LogOut size={20} />
+          </button>
         </header>
 
         {/* Dashboard Content */}
@@ -333,6 +352,6 @@ export default function App() {
           )}
         </div>
       </main>
-    </div>
+    </div >
   );
 }
