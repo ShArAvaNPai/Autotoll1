@@ -1,0 +1,115 @@
+Step Id: 57
+1. SYNOPSIS
+1.1 Title of the Project
+“AutoToll AI - Automated Toll Collection System”
+
+1.2 Objective of the Project
+ To provide computerized data storage facility for toll transactions. Toll operators can easily search and manage records of vehicles.
+ To reduce paperwork and computational time in manual toll booths.
+ The application is user-friendly and operates with minimal professional technical skills required.
+ It helps to keep the record of vehicle detections, owner details, and toll dues.
+ It helps in managing the automated toll collection and generating traffic analytics.
+
+1.3 Project Category
+Web-based AI Application.
+
+1.4 Software and Hardware requirements
+1. Software Requirements
+ Operating System : Linux / Windows 10 and above.
+ Front End : React, TypeScript, Tailwind CSS.
+ Scripting Language : Python, TypeScript.
+ Back End : FastAPI (Python).
+ Back End DB : SQLite (via SQLAlchemy).
+ AI Models : YOLOv8, EasyOCR.
+ Browser : Mozilla Firefox, Chrome etc.
+
+2. Hardware Requirements
+ Processor : Modern Multi-core CPU (i3 or above recommended).
+ Memory : Minimum 4GB RAM / 8GB RAM recommended.
+ Hard Disk : Minimum Capacity - 100 GB (SSD recommended for performance).
+
+1.5 Structure of the program
+1.5.1 Analysis:
+Our project helps toll administrators to manage vehicle movements and toll collection automatically. It uses computer vision to classify vehicles and recognize license plates.
+Activities: -
+ Automatic detection and classification of vehicles (Car, Truck, Bus, Motorcycle).
+ License plate extraction and database cross-referencing.
+ Automated toll calculation based on vehicle type and registry status.
+ Real-time monitoring of toll lanes with automated transaction logging.
+ Review queue for manual verification of low-confidence AI detections.
+ Administrative dashboard for revenue and traffic volume analytics.
+ Bulk registration of vehicles and owners via CSV/Excel import.
+
+1.5.2 Data Structures:
+Our project consists of following tables: -
+1) Owners: -
+Owner ID
+Name
+Contact Info
+Photo Path
+Registration Date
+
+2) Vehicles: -
+Vehicle ID
+License Plate
+Make & Model
+Owner ID (Foreign Key)
+Creation Date
+
+3) Detections (History): -
+Detection ID
+Vehicle Type
+License Plate
+Confidence Score
+Timestamp
+Toll Amount
+Status (Verified/Review)
+Image Path
+Known Vehicle ID
+Authorization Status
+
+1.5.3 Module Description
+1. Admin Module:
+Login
+Dashboard Summary
+View Traffic Analytics
+View Revenue Trends
+Manage Review Queue
+Update Settings (Toll Rates)
+
+2. Registry Module:
+Add New Owner
+Add New Vehicle
+Bulk Import (CSV/Excel)
+View Registry Records
+Search Owner/Vehicle Details
+
+3. Analysis Module (AI):
+Image Upload/Capture
+YOLO Classification
+EasyOCR Recognition
+Toll Calculation Logic
+Automated Data Submission
+
+4. History Module:
+View Transaction History
+Filter records by Plate/Type
+Export Detection logs
+Link to Owner registration
+
+5. Owner Portal Module:
+Login (License Plate)
+View Due Balance
+View Vehicle Detection History
+Update Contact Information
+
+1.6 Limitations: -
+1. Reliable internet connection is mandatory for cloud/server-based processing.
+2. Moderate server computing power is required for real-time AI inference.
+3. System accuracy is dependent on image quality and camera positioning.
+
+1.7 Future scope of the project: -
+a. Integration with automated SMS/Email alerts for toll violations.
+b. Implementing a mobile application for owners to pay dues instantly.
+c. Support for multi-lane real-time video stream processing.
+d. Integration with RFID/FasTag for multi-layered verification.
