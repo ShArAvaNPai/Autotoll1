@@ -151,6 +151,7 @@ export default function App() {
   }
 
   return (
+
     <div className="flex h-screen bg-black text-zinc-100 overflow-hidden relative">
 
       {/* Persistent Navigation Overlay */}
@@ -165,31 +166,51 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden relative">
         {/* Header */}
-        <header className="h-16 border-b border-zinc-900 bg-black/80 backdrop-blur-sm flex items-center justify-between px-6 z-10">
+        <header className="h-16 border-b border-zinc-800 bg-black/80 backdrop-blur-sm flex items-center justify-between px-6 z-10 sticky top-0">
           <div className="flex items-center gap-4">
-            <div className="bg-blue-600 p-1.5 rounded-lg">
-              <Car className="text-white" size={16} />
+            <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-500/20">
+              <Car className="text-white" size={20} />
             </div>
-            <span className="font-bold text-sm text-white">AutoToll AI</span>
+            <div>
+              <span className="font-bold text-lg text-slate-900 tracking-tight block">AutoToll AI</span>
+              <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold block -mt-1">Admin Console</span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-4 text-zinc-500 text-sm">
-            <span className="px-3 py-1 bg-zinc-900 rounded-full border border-zinc-800 text-zinc-400">Lane #1: Active</span>
-            <span className="px-3 py-1 bg-zinc-900 rounded-full border border-zinc-800 text-zinc-400">Camera: Online</span>
+          <div className="flex items-center gap-4 text-sm">
+            <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 font-medium flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Lane #1: Active
+            </span>
+            <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full border border-blue-100 font-medium">Camera: Online</span>
           </div>
 
-          <button className="p-2 text-zinc-500 hover:text-white relative">
-            <Bell size={20} />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-600 rounded-full border-2 border-black"></span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all relative">
+              <Bell size={20} />
+              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+            </button>
 
-          <button
-            onClick={() => setUserRole(null)}
-            className="p-2 text-zinc-500 hover:text-red-400 transition-colors ml-2"
-            title="Sign Out"
-          >
-            <LogOut size={20} />
-          </button>
+            <div className="h-8 w-px bg-slate-200 mx-2"></div>
+
+            <div className="flex items-center gap-3">
+              <div className="text-right hidden md:block">
+                <div className="text-sm font-bold text-slate-900">Administrator</div>
+                <div className="text-xs text-slate-500">Super User</div>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 border border-white shadow-sm flex items-center justify-center">
+                <User size={20} className="text-blue-600" />
+              </div>
+            </div>
+
+            <button
+              onClick={() => setUserRole(null)}
+              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all ml-2"
+              title="Sign Out"
+            >
+              <LogOut size={20} />
+            </button>
+          </div>
         </header>
 
         {/* View Content */}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Activity, User, Clock, Settings, FileCheck, ScanLine, Car } from 'lucide-react';
+import { Activity, User, Clock, Settings, FileCheck, ScanLine, Car, ChevronRight, Menu } from 'lucide-react';
 
 interface DashboardMenuProps {
     onNavigate: (view: any) => void;
@@ -10,129 +10,67 @@ interface DashboardMenuProps {
 }
 
 export const DashboardMenu: React.FC<DashboardMenuProps> = ({ onNavigate, stats }) => {
-    const [isHovered, setIsHovered] = useState(false);
+    const [isExpanded, setIsExpanded] = useState(false);
 
     const menuItems = [
-        {
-            id: 'monitor',
-            title: 'Live',
-            icon: ScanLine,
-            color: 'blue',
-            action: () => onNavigate('monitor'),
-            angle: 360 // Right
-        },
-        {
-            id: 'analytics',
-            title: 'Analytics',
-            icon: Activity,
-            color: 'purple',
-            action: () => onNavigate('analytics'),
-            angle: 342
-        },
-        {
-            id: 'registry',
-            title: 'Registry',
-            icon: User,
-            color: 'emerald',
-            action: () => onNavigate('registry'),
-            angle: 324
-        },
-        {
-            id: 'history',
-            title: 'History',
-            icon: Clock,
-            color: 'indigo',
-            action: () => onNavigate('history'),
-            angle: 306
-        },
-        {
-            id: 'review',
-            title: 'Review',
-            icon: FileCheck,
-            color: 'amber',
-            action: () => onNavigate('review'),
-            angle: 288
-        },
-        {
-            id: 'settings',
-            title: 'Config',
-            icon: Settings,
-            color: 'zinc',
-            action: () => onNavigate('settings'),
-            angle: 270 // Up
-        }
+        { id: 'monitor', title: 'Live Monitor', icon: ScanLine, color: 'text-blue-600', bg: 'bg-blue-50' },
+        { id: 'analytics', title: 'Analytics', icon: Activity, color: 'text-purple-600', bg: 'bg-purple-50' },
+        { id: 'registry', title: 'Registry', icon: User, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+        { id: 'history', title: 'History', icon: Clock, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+        { id: 'review', title: 'Review', icon: FileCheck, color: 'text-amber-600', bg: 'bg-amber-50' },
+        { id: 'realtime', title: 'Realtime', icon: Car, color: 'text-cyan-600', bg: 'bg-cyan-50' },
+        { id: 'settings', title: 'Config', icon: Settings, color: 'text-slate-600', bg: 'bg-slate-50' }
     ];
 
-    const getColorClasses = (color: string) => {
-        const colors: Record<string, string> = {
-            blue: 'hover:bg-blue-500 hover:text-white text-blue-400 border-blue-500/50',
-            purple: 'hover:bg-purple-500 hover:text-white text-purple-400 border-purple-500/50',
-            amber: 'hover:bg-amber-500 hover:text-white text-amber-400 border-amber-500/50',
-            emerald: 'hover:bg-emerald-500 hover:text-white text-emerald-400 border-emerald-500/50',
-            indigo: 'hover:bg-indigo-500 hover:text-white text-indigo-400 border-indigo-500/50',
-            cyan: 'hover:bg-cyan-500 hover:text-white text-cyan-400 border-cyan-500/50',
-            zinc: 'hover:bg-zinc-600 hover:text-white text-zinc-400 border-zinc-500/50',
-        };
-        return colors[color] || colors.zinc;
-    };
-
-    const radius = 180; // Slightly larger radius for the fan
-
     return (
-        <div className="fixed -bottom-36 -left-36 z-50 pointer-events-none w-[400px] h-[400px] flex items-center justify-center">
-
-            {/* Ambient Background Glow (Left Sided) - Reduced intensity for overlay */}
-            <div className={`absolute top-1/2 left-0 -translate-y-1/2 w-[400px] h-[400px] bg-blue-900/5 rounded-full blur-3xl transition-all duration-1000 ${isHovered ? 'scale-110 opacity-20' : 'scale-100 opacity-0'}`}></div>
-
-            {/* Main Container */}
-            <div
-                className="relative flex items-center justify-center w-[400px] h-[400px] pointer-events-auto"
-                onMouseEnter={() => setIsHovered(true)}
-                onMouseLeave={() => setIsHovered(false)}
-            >
-
-                {/* Core Button (Center) */}
-                <div className={`z-20 w-24 h-24 rounded-full bg-zinc-950/90 backdrop-blur-md border-2 border-zinc-800 flex items-center justify-center cursor-pointer transition-all duration-500 shadow-[0_0_30px_rgba(0,0,0,0.5)] ${isHovered ? 'scale-90 border-blue-500/50 shadow-[0_0_50px_rgba(59,130,246,0.2)]' : 'scale-100'}`}>
-                    <div className={`relative w-16 h-16 rounded-full bg-black/50 flex items-center justify-center border border-zinc-700 transition-all duration-500 ${isHovered ? 'rotate-180 border-blue-400/30' : 'rotate-0'}`}>
-                        <Car className={`transition-colors duration-300 ${isHovered ? 'text-blue-400' : 'text-zinc-500'}`} size={28} />
-                        <div className={`absolute inset-0 rounded-full border border-dashed border-zinc-600 transition-all duration-1000 ${isHovered ? 'rotate-[-360deg] scale-110 border-blue-500/30' : 'rotate-0 scale-100'}`}></div>
-                    </div>
-
-                    <span className={`absolute -bottom-10 text-zinc-500 text-[10px] font-mono tracking-widest transition-opacity duration-300 ${isHovered ? 'opacity-0' : 'opacity-100'}`}>SYS.IDLE</span>
-                </div>
-
-                {/* Orbiting Items */}
-                {menuItems.map((item, index) => {
-                    // Calculate position
-                    const rad = (item.angle * Math.PI) / 180;
-                    const x = Math.cos(rad) * radius;
-                    const y = Math.sin(rad) * radius;
-
-                    return (
-                        <button
-                            key={item.id}
-                            onClick={item.action}
-                            className={`absolute w-16 h-16 rounded-full bg-zinc-900/90 backdrop-blur-md border-2 flex flex-col items-center justify-center transition-all duration-500 shadow-lg z-10 
-                                ${getColorClasses(item.color)}
-                                ${isHovered ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-50 pointer-events-none translate-x-0 translate-y-0'}
-                            `}
-                            style={{
-                                transform: isHovered ? `translate(${x}px, ${y}px)` : 'translate(0px, 0px)',
-                            }}
-                        >
-                            <item.icon size={20} className="mb-0.5" />
-                            <span className="text-[9px] font-bold uppercase tracking-wider">{item.title}</span>
-                        </button>
-                    );
-                })}
-
-                {/* Connecting Lines */}
-                <svg className={`absolute inset-0 pointer-events-none transition-opacity duration-500 ${isHovered ? 'opacity-100' : 'opacity-0'}`} width="400" height="400">
-                    <path d={`M 200 200 L ${200 + Math.cos(360 * Math.PI / 180) * radius} ${200 + Math.sin(360 * Math.PI / 180) * radius}`} stroke="rgba(255,255,255,0.1)" />
-                </svg>
-
+        <div
+            className="fixed bottom-6 left-6 z-50 flex items-end gap-4 pointer-events-none"
+            onMouseEnter={() => setIsExpanded(true)}
+            onMouseLeave={() => setIsExpanded(false)}
+        >
+            {/* Main Toggle Button */}
+            <div className={`
+                relative z-20 w-16 h-16 rounded-2xl bg-white shadow-2xl shadow-blue-900/10 border border-slate-100 flex items-center justify-center cursor-pointer pointer-events-auto transition-all duration-500
+                ${isExpanded ? 'rotate-90 scale-110 bg-blue-50 border-blue-200' : 'rotate-0 scale-100'}
+            `}>
+                <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/10 to-indigo-500/10 rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
+                {isExpanded ? (
+                    <Menu className="text-blue-600 w-8 h-8" />
+                ) : (
+                    <Car className="text-slate-700 w-8 h-8" />
+                )}
             </div>
 
+            {/* Expanded Dock */}
+            <div className={`
+                absolute bottom-0 left-20 h-16 bg-white/90 backdrop-blur-xl border border-white/50 shadow-2xl shadow-slate-200/50 rounded-2xl flex items-center px-2 gap-2 origin-left transition-all duration-500 ease-out pointer-events-auto
+                ${isExpanded ? 'w-[400px] opacity-100 translate-x-0' : 'w-0 opacity-0 -translate-x-10 overflow-hidden'}
+            `}>
+                {menuItems.map((item, index) => (
+                    <button
+                        key={item.id}
+                        onClick={() => onNavigate(item.id)}
+                        className={`
+                            group relative flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all duration-300 hover:scale-110
+                            ${item.bg}
+                        `}
+                        title={item.title}
+                        style={{ transitionDelay: `${index * 50}ms` }}
+                    >
+                        <item.icon size={20} className={`${item.color} transition-transform duration-300 group-hover:-translate-y-0.5`} />
+                        <span className={`absolute -bottom-8 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50`}>
+                            {item.title}
+                        </span>
+
+                        {/* Notification Dot for Review */}
+                        {item.id === 'review' && stats.pendingReview > 0 && (
+                            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full shadow-sm animate-pulse">
+                                {stats.pendingReview}
+                            </span>
+                        )}
+                    </button>
+                ))}
+            </div>
         </div>
     );
 };

@@ -27,10 +27,10 @@ export function LoginView({ onLogin }: LoginViewProps) {
             <div className="absolute bottom-0 right-0 w-full h-96 bg-purple-600/10 blur-[100px] pointer-events-none" />
 
             <div className="z-10 text-center mb-12 space-y-4">
-                <div className="inline-flex items-center justify-center p-4 bg-blue-600 rounded-2xl mb-4 shadow-lg shadow-blue-900/20">
-                    <Car className="text-white w-10 h-10" />
+                <div className="inline-flex items-center justify-center p-4 bg-zinc-900 rounded-2xl mb-4 shadow-lg shadow-blue-900/20 border border-zinc-800/50">
+                    <Car className="text-blue-500 w-10 h-10" />
                 </div>
-                <h1 className="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">
+                <h1 className="text-4xl md:text-6xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 tracking-tight">
                     AutoToll AI
                 </h1>
                 <p className="text-zinc-500 text-lg max-w-md mx-auto">
@@ -42,13 +42,13 @@ export function LoginView({ onLogin }: LoginViewProps) {
                 {/* Admin Card */}
                 <div
                     onClick={() => setShowAdminLogin(true)}
-                    className="group relative cursor-pointer bg-zinc-900/40 hover:bg-zinc-900/60 border border-zinc-800 hover:border-blue-500/30 rounded-2xl p-8 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-900/10"
+                    className="group relative cursor-pointer bg-zinc-900/40 hover:bg-zinc-900/80 border border-zinc-800 hover:border-blue-500/30 rounded-2xl p-8 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-900/20 backdrop-blur-sm"
                 >
                     <div className="absolute top-4 right-4 p-2 bg-zinc-800 rounded-full text-zinc-400 group-hover:text-blue-400 transition-colors">
                         <ShieldCheck size={20} />
                     </div>
                     <div className="h-40 flex items-center justify-center mb-6">
-                        <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-500/20 to-cyan-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                        <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-500/20 to-cyan-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 ring-1 ring-blue-500/20 group-hover:ring-blue-500/40">
                             <ShieldCheck className="w-10 h-10 text-blue-400" />
                         </div>
                     </div>
@@ -56,7 +56,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
                     <p className="text-zinc-500 text-sm leading-relaxed">
                         Access the full dashboard, monitor real-time traffic, manage registry, and view analytics.
                     </p>
-                    <div className="mt-6 flex items-center text-blue-400 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="mt-6 flex items-center text-blue-400 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-[-10px] group-hover:translate-x-0 duration-300">
                         Admin Login &rarr;
                     </div>
                 </div>
@@ -64,13 +64,13 @@ export function LoginView({ onLogin }: LoginViewProps) {
                 {/* Owner Card */}
                 <div
                     onClick={() => onLogin('owner')}
-                    className="group relative cursor-pointer bg-zinc-900/40 hover:bg-zinc-900/60 border border-zinc-800 hover:border-emerald-500/30 rounded-2xl p-8 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-emerald-900/10"
+                    className="group relative cursor-pointer bg-zinc-900/40 hover:bg-zinc-900/80 border border-zinc-800 hover:border-emerald-500/30 rounded-2xl p-8 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-emerald-900/20 backdrop-blur-sm"
                 >
                     <div className="absolute top-4 right-4 p-2 bg-zinc-800 rounded-full text-zinc-400 group-hover:text-emerald-400 transition-colors">
                         <User size={20} />
                     </div>
                     <div className="h-40 flex items-center justify-center mb-6">
-                        <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                        <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 ring-1 ring-emerald-500/20 group-hover:ring-emerald-500/40">
                             <Car className="w-10 h-10 text-emerald-400" />
                         </div>
                     </div>
@@ -78,7 +78,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
                     <p className="text-zinc-500 text-sm leading-relaxed">
                         Register your vehicle, check payment status, and view your toll history securely.
                     </p>
-                    <div className="mt-6 flex items-center text-emerald-400 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="mt-6 flex items-center text-emerald-400 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-[-10px] group-hover:translate-x-0 duration-300">
                         Owner Portal &rarr;
                     </div>
                 </div>
@@ -90,57 +90,57 @@ export function LoginView({ onLogin }: LoginViewProps) {
 
             {/* Admin Login Modal */}
             {showAdminLogin && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-8 relative shadow-2xl">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+                    <div className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-md p-8 relative shadow-2xl shadow-black/50">
                         <button
                             onClick={() => { setShowAdminLogin(false); setError(''); }}
-                            className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+                            className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
                         >
                             <X size={20} />
                         </button>
 
                         <div className="flex flex-col items-center mb-6">
-                            <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center mb-4 border border-blue-500/20">
+                            <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center mb-4 border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.2)]">
                                 <ShieldCheck className="w-8 h-8 text-blue-400" />
                             </div>
                             <h2 className="text-2xl font-bold text-white">Admin Access</h2>
-                            <p className="text-zinc-400 text-sm">Enter your credentials to continue</p>
+                            <p className="text-zinc-400 text-sm mt-1">Authorized personnel only</p>
                         </div>
 
                         <form onSubmit={handleAdminLogin} className="space-y-4">
                             <div>
-                                <label className="block text-xs font-medium text-zinc-400 mb-1 uppercase tracking-wider">Username</label>
+                                <label className="block text-xs font-medium text-zinc-400 mb-1.5 uppercase tracking-wider">Username</label>
                                 <input
                                     type="text"
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
-                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 hover:border-zinc-700 transition-all placeholder:text-zinc-600"
                                     placeholder="Enter username"
                                     autoFocus
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-zinc-400 mb-1 uppercase tracking-wider">Password</label>
+                                <label className="block text-xs font-medium text-zinc-400 mb-1.5 uppercase tracking-wider">Password</label>
                                 <input
                                     type="password"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 hover:border-zinc-700 transition-all placeholder:text-zinc-600"
                                     placeholder="Enter password"
                                 />
                             </div>
 
                             {error && (
-                                <div className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3 text-center">
+                                <div className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3 text-center animate-in shake">
                                     {error}
                                 </div>
                             )}
 
                             <button
                                 type="submit"
-                                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-lg transition-colors flex items-center justify-center gap-2 mt-2"
+                                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-lg transition-all hover:shadow-[0_0_20px_rgba(37,99,235,0.3)] flex items-center justify-center gap-2 mt-2 group"
                             >
-                                <LogIn size={18} />
+                                <LogIn size={18} className="group-hover:translate-x-0.5 transition-transform" />
                                 Login to Dashboard
                             </button>
                         </form>

@@ -5,6 +5,21 @@ import { AnalysisResult, VehicleType } from '../types';
 import { TOLL_RATES as DEFAULT_RATES } from '../constants';
 
 export function RealtimeDetectionView() {
+    // Add scanner animation style
+    useEffect(() => {
+        const style = document.createElement('style');
+        style.innerHTML = `
+          @keyframes scan {
+            0% { top: 0%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+          }
+        `;
+        document.head.appendChild(style);
+        return () => { document.head.removeChild(style); };
+    }, []);
+
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isActive, setIsActive] = useState(false);
@@ -147,14 +162,22 @@ export function RealtimeDetectionView() {
                         </div>
                     )}
 
+                    {/* Scanner Animation */}
+                    {isActive && (
+                        <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
+                            <div className="w-full h-1 bg-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.8)] absolute top-0 animate-[scan_3s_linear_infinite]"></div>
+                        </div>
+                    )}
+
                     {/* Overlay Status */}
-                    <div className="absolute top-4 right-4 flex gap-2">
+                    <div className="absolute top-4 right-4 flex gap-2 z-20">
                         {isActive && (
                             <div className="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-full animate-pulse flex items-center gap-2">
                                 <span className="w-2 h-2 bg-white rounded-full"></span>
                                 LIVE
                             </div>
                         )}
+
                         {isProcessing && (
                             <div className="px-3 py-1 bg-black/50 backdrop-blur text-zinc-300 text-xs font-medium rounded-full border border-white/10 flex items-center gap-2">
                                 <Loader2 size={12} className="animate-spin" />
