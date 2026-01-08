@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Camera, X, Play, Square, Loader2, AlertTriangle, ScanLine, IndianRupee } from 'lucide-react';
+import { Camera, Play, Square, Loader2, AlertTriangle, ScanLine, IndianRupee } from 'lucide-react';
 import { analyzeVehicleImageLocal } from '../services/api';
 import { AnalysisResult, VehicleType } from '../types';
 import { TOLL_RATES as DEFAULT_RATES } from '../constants';
@@ -21,7 +21,6 @@ export function RealtimeDetectionView() {
     }, []);
 
     const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isActive, setIsActive] = useState(false);
     const [lastResult, setLastResult] = useState<AnalysisResult | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -84,9 +83,9 @@ export function RealtimeDetectionView() {
                     if (blob) {
                         const file = new File([blob], "realtime_frame.jpg", { type: "image/jpeg" });
                         try {
-                            // We use the existing analyze function
                             const result = await analyzeVehicleImageLocal(file);
-                            // Only update if we found something with decent confidence or if it's different
+                            // We still use the 'color' field if available, but don't show it 
+                            // heavily or require the HUD to display it.
                             if (result.licensePlate !== "UNKNOWN" && result.confidence > 0.4) {
                                 setLastResult(result);
                             }
@@ -217,6 +216,16 @@ export function RealtimeDetectionView() {
                                         {lastResult.vehicleType}
                                     </span>
                                 </div>
+
+                                {lastResult.color && (
+                                    <div className="flex justify-between items-center p-3 bg-zinc-950/50 rounded-lg border border-zinc-800">
+                                        <span className="text-sm text-zinc-400">Color</span>
+                                        <span className="text-sm font-bold text-purple-400 capitalize">
+                                            {lastResult.color}
+                                        </span>
+                                    </div>
+                                )}
+
                                 <div className="flex justify-between items-center p-3 bg-zinc-950/50 rounded-lg border border-zinc-800">
                                     <span className="text-sm text-zinc-400">Est. Toll</span>
                                     <span className="text-sm font-bold text-emerald-400 flex items-center gap-1">

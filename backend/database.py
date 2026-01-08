@@ -48,9 +48,16 @@ class Detection(Base):
     status = Column(String, default="verified") # 'verified', 'pending_review'
     image_path = Column(String, nullable=True)
 
-    # Optional: Link to a known vehicle if found
     known_vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=True)
     is_authorized = Column(Integer, default=0) # 0=Unknown, 1=Authorized, -1=Unauthorized
+
+class Correction(Base):
+    __tablename__ = "corrections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    image_hash = Column(String, unique=True, index=True)
+    corrected_plate = Column(String)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 def init_db():
     Base.metadata.create_all(bind=engine)

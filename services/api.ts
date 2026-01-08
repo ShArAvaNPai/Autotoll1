@@ -24,3 +24,19 @@ export const analyzeVehicleImageLocal = async (file: File): Promise<AnalysisResu
     throw error;
   }
 };
+
+export const submitCorrection = async (detectionId: number, correctedPlate: string): Promise<void> => {
+  const formData = new FormData();
+  formData.append('detection_id', detectionId.toString());
+  formData.append('corrected_plate', correctedPlate);
+
+  const response = await fetch(`${API_URL}/api/correct`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Failed to submit correction: ${err}`);
+  }
+};

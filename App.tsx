@@ -152,7 +152,7 @@ export default function App() {
 
   return (
 
-    <div className="flex h-screen bg-black text-zinc-100 overflow-hidden relative">
+    <div className="flex h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900 via-zinc-950 to-black text-zinc-100 overflow-hidden relative">
 
       {/* Persistent Navigation Overlay */}
       <DashboardMenu
@@ -166,7 +166,7 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden relative">
         {/* Header */}
-        <header className="h-16 border-b border-zinc-800 bg-black/80 backdrop-blur-sm flex items-center justify-between px-6 z-10 sticky top-0">
+        <header className="h-16 border-b border-white/5 bg-black/40 backdrop-blur-md flex items-center justify-between px-6 z-10 sticky top-0">
           <div className="flex items-center gap-4">
             <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-500/20">
               <Car className="text-white" size={20} />

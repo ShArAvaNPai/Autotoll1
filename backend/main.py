@@ -17,8 +17,10 @@ from sqlalchemy import func, Float
 import sqlalchemy
 import pandas as pd
 
+import hashlib
+
 # Import Database Models
-from database import SessionLocal, engine, init_db, Owner, Vehicle, Detection
+from database import SessionLocal, engine, init_db, Owner, Vehicle, Detection, Correction
 
 # Initialize DB Tables
 init_db()
@@ -416,6 +418,9 @@ async def import_data(file: UploadFile = File(...), db: Session = Depends(get_db
 
 # --- Analysis Endpoint ---
 
+def get_image_hash(image_bytes):
+    return hashlib.sha256(image_bytes).hexdigest()
+
 @app.post("/analyze")
 async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
@@ -427,10 +432,22 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
         img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
 
         # Run YOLO detection
+        img_hash = get_image_hash(contents)
+        
+        # Check for existing correction
+        existing_correction = db.query(Correction).filter(Correction.image_hash == img_hash).first()
+        
+        # Default Logic
         results = model(img_cv)
         
         vehicle_type = "Unknown"
         confidence = 0.0
+        license_plate = "UNKNOWN"
+        vehicle_color = "Unknown" # Default
+        
+        # If we have a correction, we prioritize it for the plate, but might still run YOLO for type/color
+        # For simplicity, if corrected, we trust the correction fully for the plate.
+
         
         # classes for vehicles in COCO dataset
         # 2: car, 3: motorcycle, 5: bus, 7: truck
@@ -447,27 +464,87 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
                         confidence = conf
                         vehicle_type = coco_map[cls_id]
 
+                    if conf > confidence:
+                        confidence = conf
+                        vehicle_type = coco_map[cls_id]
+                        # Capture the specific box for color detection
+                        x1, y1, x2, y2 = map(int, b.xyxy[0].cpu().numpy())
+                        color_crop = img_cv[y1:y2, x1:x2]
+
+        # --- Color Detection ---
+        def get_dominant_color(image):
+            """Detects dominant color using K-Means"""
+            try:
+                # Resize for speed
+                image = cv2.resize(image, (64, 64), interpolation=cv2.INTER_AREA)
+                # Convert to RGB (OpenCV is BGR)
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                # Reshape to list of pixels
+                pixels = image.reshape((-1, 3))
+                pixels = np.float32(pixels)
+                
+                # K-Means
+                criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+                k = 1
+                _, labels, centers = cv2.kmeans(pixels, k, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+                
+                dominant_color = centers[0].astype(int) # [R, G, B]
+                r, g, b = dominant_color
+                
+                # Simple Color Naming
+                if r < 60 and g < 60 and b < 60: return "Black"
+                if r > 200 and g > 200 and b > 200: return "White"
+                if r > 150 and g < 100 and b < 100: return "Red"
+                if r < 100 and g > 150 and b < 100: return "Green"
+                if r < 100 and g < 100 and b > 150: return "Blue"
+                if r > 200 and g > 200 and b < 100: return "Yellow"
+                if abs(r-g) < 20 and abs(g-b) < 20 and r > 60 and r < 200: return "Silver" # Grey/Silver
+                
+                return "Unknown Color"
+            except:
+                return "Unknown"
+
+        vehicle_color = "Unknown"
+        if 'color_crop' in locals() and color_crop.size > 0:
+             vehicle_color = get_dominant_color(color_crop)
+
         # --- Hybrid OCR Pipeline ---
         
         import re
 
         def preprocess_image(img):
-            """Applies CLAHE and filters to improve OCR"""
-            # Resize if too small
+            """Applies advanced preprocessing for OCR"""
+            # Resize if too small (always helpful for OCR)
             h, w = img.shape[:2]
             if h < 300:
                 scale = 300 / h
                 img = cv2.resize(img, (int(w*scale), int(h*scale)), interpolation=cv2.INTER_CUBIC)
             
+            # Convert to Gray
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             
-            # CLAHE (Contrast Limited Adaptive Histogram Equalization)
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-            contrast = clahe.apply(gray)
+            # Morphological Transformation to Remove Noise
+            # Kernel size depends on image resolution, 3x3 is a safe general bet
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
             
-            # Bilateral Filter (Remove noise, keep edges)
-            blur = cv2.bilateralFilter(contrast, 11, 17, 17)
-            return blur
+            # TopHat (extracts bright objects from dark background) + BlackHat (vice versa)
+            # This helps standardizes lighting locally
+            topHat = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, kernel)
+            blackHat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, kernel)
+            
+            # Add and subtract to enhance contrast
+            add = cv2.add(gray, topHat)
+            subtract = cv2.subtract(add, blackHat)
+            
+            # Blur to remove high freq noise
+            blur = cv2.GaussianBlur(subtract, (5, 5), 0)
+            
+            # Adaptive Thresholding (Better than partial Otsu for uneven lighting)
+            thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                          cv2.THRESH_BINARY, 19, 9)
+                                          
+            # Final Dilation to join broken characters
+            return cv2.dilate(thresh, kernel, iterations=1)
 
         def score_plate(text):
             """Scores a string based on likelihood of being a license plate"""
@@ -552,8 +629,14 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
                                          scale = 32 / ph
                                          thresh_plate = cv2.resize(thresh_plate, (int(pw*scale), int(ph*scale)), interpolation=cv2.INTER_CUBIC)
                                      
-                                     # Run OCR
-                                     plate_ocr = reader.readtext(thresh_plate, detail=1)
+                                     # Run OCR with strict settings
+                                     # allowlist: Only these chars
+                                     # mag_ratio: Upscale input for better small char detection (2.0 is usually sweet spot)
+                                     # text_threshold: Lower confidence acceptance (default 0.7, lowering for bad inputs)
+                                     plate_ocr = reader.readtext(thresh_plate, detail=1, 
+                                                                 allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+                                                                 mag_ratio=3.0,
+                                                                 text_threshold=0.6)
                                      
                                      for (bbox, text, prob) in plate_ocr:
                                          cleaned = ''.join(e for e in text if e.isalnum()).upper()
@@ -574,7 +657,12 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
                      crop = img_cv[y1:y2, x1:x2]
                      processed_crop = preprocess_image(crop)
                      
-                     crop_result = reader.readtext(processed_crop, detail=1)
+                     crop = img_cv[y1:y2, x1:x2]
+                     processed_crop = preprocess_image(crop)
+                     
+                     crop_result = reader.readtext(processed_crop, detail=1, 
+                                                   allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+                                                   mag_ratio=2.5)
                      for (bbox, text, prob) in crop_result:
                           cleaned = ''.join(e for e in text if e.isalnum()).upper()
                           candidates.append({'text': cleaned, 'source': 'car_crop', 'prob': prob, 'score': score_plate(cleaned)})
@@ -601,7 +689,9 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
                   scan_img = img_cv
              
              processed_full = preprocess_image(scan_img)
-             full_result = reader.readtext(processed_full, detail=1)
+             full_result = reader.readtext(processed_full, detail=1,
+                                           allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+                                           mag_ratio=2.0)
              
              for (bbox, text, prob) in full_result:
                   cleaned = ''.join(e for e in text if e.isalnum()).upper()
@@ -621,6 +711,13 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
              if best['score'] > 0:
                  license_plate = best['text']
                  confidence = best['prob'] # Use OCR confidence
+        
+        # OVERRIDE: Apply correction if exists
+        if existing_correction:
+            print(f"DEBUG: Applying learned correction for hash {img_hash}: {existing_correction.corrected_plate}")
+            license_plate = existing_correction.corrected_plate
+            confidence = 1.0
+            status = 'verified' # Auto-verify learned plates
         
         # Determine Status (Re-evaluate logic)
         status = 'verified'
@@ -680,9 +777,9 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
             "confidence": confidence,
             "tollAmount": toll_amount,
             "status": status,
-            "color": "Detected", 
-            "makeModel": f"Detected {vehicle_type}", 
-            "description": f"A {vehicle_type.lower()} detected with {(confidence*100):.1f}% confidence."
+            "color": vehicle_color, 
+            "makeModel": f"Detected {vehicle_color} {vehicle_type}", 
+            "description": f"A {vehicle_color.lower()} {vehicle_type.lower()} detected with {(confidence*100):.1f}% confidence."
         }
 
         if known_vehicle:
@@ -709,6 +806,61 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
             "makeModel": "Unknown",
             "description": str(e)
         }
+
+@app.post("/api/correct")
+def submit_correction(
+    detection_id: int = Form(...),
+    corrected_plate: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    detection = db.query(Detection).filter(Detection.id == detection_id).first()
+    if not detection:
+        raise HTTPException(status_code=404, detail="Detection not found")
+
+    # 1. Update the Detection Record
+    detection.license_plate = corrected_plate.upper()
+    detection.status = 'verified'
+    detection.confidence = "1.00" # Manual correction implies 100% confidence
+    
+    # 2. "Learn" - Save the correction for this image hash
+    if detection.image_path:
+        try:
+            # Construct full path to read the file
+            # image_path is like "/uploads/..."
+            filename = os.path.basename(detection.image_path)
+            full_path = os.path.join(UPLOAD_DIR, filename)
+            
+            if os.path.exists(full_path):
+                with open(full_path, "rb") as f:
+                    content = f.read()
+                    img_hash = get_image_hash(content)
+                    
+                    # Upsert correction
+                    correction = db.query(Correction).filter(Correction.image_hash == img_hash).first()
+                    if correction:
+                        correction.corrected_plate = corrected_plate.upper()
+                    else:
+                        new_correction = Correction(image_hash=img_hash, corrected_plate=corrected_plate.upper())
+                        db.add(new_correction)
+                    
+                    # 3. Save to Training Dataset (Simulated Training Loop)
+                    TRAIN_DIR = "training_data"
+                    if not os.path.exists(TRAIN_DIR):
+                        os.makedirs(TRAIN_DIR)
+                    
+                    # Copy image
+                    train_img_path = os.path.join(TRAIN_DIR, f"{img_hash}.jpg")
+                    shutil.copy2(full_path, train_img_path)
+                    
+                    # Save label (Simple text file for now)
+                    with open(os.path.join(TRAIN_DIR, f"{img_hash}.txt"), "w") as label_f:
+                        label_f.write(corrected_plate.upper())
+                        
+        except Exception as e:
+            print(f"Error learning from correction: {e}")
+
+    db.commit()
+    return {"status": "success", "message": "Correction saved and learned."}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Upload, Camera, X, Check, Loader2, Maximize2, AlertTriangle, ScanLine } from 'lucide-react';
+import { Upload, Camera, X, Check, Loader2, Maximize2, AlertTriangle, ScanLine, Edit2, Save } from 'lucide-react';
 import { AnalysisResult, VehicleType } from '../types';
+import { submitCorrection } from '../services/api';
 
 interface ScannerViewProps {
   onAnalyze: (file: File) => void;
@@ -18,11 +19,44 @@ export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedIma
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Local state to handle UI updates instantly after correction
+  const [localResult, setLocalResult] = useState<AnalysisResult | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempPlate, setTempPlate] = useState("");
+
+  useEffect(() => {
+    if (lastResult) {
+      setLocalResult(lastResult);
+      setIsEditing(false); // Reset edit mode on new scan
+    } else {
+      setLocalResult(null);
+    }
+  }, [lastResult]);
+
   useEffect(() => {
     if (lastScannedImage && !preview) {
       setPreview(lastScannedImage);
     }
   }, [lastScannedImage]);
+
+  const handleStartEditing = () => {
+    if (localResult) {
+      setTempPlate(localResult.licensePlate);
+      setIsEditing(true);
+    }
+  };
+
+  const handleSaveCorrection = async () => {
+    if (!localResult) return;
+    try {
+      await submitCorrection(localResult.id, tempPlate);
+      setLocalResult({ ...localResult, licensePlate: tempPlate.toUpperCase(), confidence: 1.0 });
+      setIsEditing(false);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to save correction");
+    }
+  };
 
   // ... (camera logic remains same) ...
   const startCamera = async () => {
@@ -99,12 +133,12 @@ export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedIma
   const [isDiscarding, setIsDiscarding] = useState(false);
 
   const handleDiscard = async () => {
-    if (!lastResult?.id) return;
+    if (!localResult?.id) return;
     if (!window.confirm("Discard this detection? It will be removed from history.")) return;
 
     setIsDiscarding(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/detections/${lastResult.id}`, {
+      const res = await fetch(`http://localhost:8000/api/detections/${localResult.id}`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -203,24 +237,49 @@ export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedIma
       </div>
 
       {/* Result Card (Minimal) */}
-      {lastResult && !isAnalyzing && (
+      {localResult && !isAnalyzing && (
         <div className="bg-zinc-900 rounded-xl p-5 border border-zinc-800 shadow-xl animate-in slide-in-from-bottom-4 duration-500">
           <div className="flex items-start justify-between mb-4">
-            <div>
+            <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <p className="text-xs font-semibold text-blue-400 uppercase tracking-widest">Detection Result</p>
-                {lastResult.owner && (
+                {localResult.owner && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
                     <Check size={10} />
                     REGISTERED
                   </span>
                 )}
               </div>
-              <h2 className="text-2xl font-bold font-mono text-white tracking-tight">{lastResult.licensePlate}</h2>
+
+              {isEditing ? (
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="text"
+                    value={tempPlate}
+                    onChange={(e) => setTempPlate(e.target.value.toUpperCase())}
+                    className="bg-zinc-950 border border-blue-500 rounded px-3 py-1 text-2xl font-mono font-bold text-white w-full max-w-[200px] outline-none"
+                    autoFocus
+                  />
+                  <button onClick={handleSaveCorrection} className="p-2 bg-blue-600 text-white rounded hover:bg-blue-500">
+                    <Save size={20} />
+                  </button>
+                  <button onClick={() => setIsEditing(false)} className="p-2 bg-zinc-800 text-zinc-400 rounded hover:bg-zinc-700">
+                    <X size={20} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 group">
+                  <h2 className="text-2xl font-bold font-mono text-white tracking-tight">{localResult.licensePlate}</h2>
+                  <button onClick={handleStartEditing} className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-500 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-all">
+                    <Edit2 size={16} />
+                  </button>
+                </div>
+              )}
+
             </div>
-            <div className={`px-3 py-1 rounded-full text-xs font-bold border ${lastResult.confidence > 0.85 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+            <div className={`px-3 py-1 rounded-full text-xs font-bold border ${localResult.confidence > 0.85 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
               }`}>
-              {(lastResult.confidence * 100).toFixed(0)}% CONFIDENCE
+              {(localResult.confidence * 100).toFixed(0)}% CONFIDENCE
             </div>
           </div>
 
@@ -228,27 +287,27 @@ export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedIma
             <div className="p-3 bg-zinc-950/50 rounded-lg border border-zinc-800">
               <p className="text-xs text-zinc-500 mb-1">Vehicle Type</p>
               <div className="flex items-center gap-2">
-                <span className="font-medium text-zinc-200 capitalize">{lastResult.vehicleType}</span>
+                <span className="font-medium text-zinc-200 capitalize">{localResult.vehicleType}</span>
               </div>
             </div>
             <div className="p-3 bg-zinc-950/50 rounded-lg border border-zinc-800">
               <p className="text-xs text-zinc-500 mb-1">Make/Model</p>
               <div className="flex items-center gap-2">
-                <span className="font-medium text-zinc-200 truncate">{lastResult.makeModel}</span>
+                <span className="font-medium text-zinc-200 truncate">{localResult.makeModel}</span>
               </div>
             </div>
           </div>
 
           {/* Owner Information Section */}
-          {lastResult.owner && (
+          {localResult.owner && (
             <div className="mt-4 p-4 bg-gradient-to-br from-emerald-500/5 to-emerald-600/5 rounded-lg border border-emerald-500/20">
               <p className="text-xs font-semibold text-emerald-400 uppercase tracking-widest mb-3">Registered Owner</p>
               <div className="flex items-center gap-4">
-                {lastResult.owner.photo && (
+                {localResult.owner.photo && (
                   <div className="w-16 h-16 rounded-full overflow-hidden bg-zinc-800 border-2 border-emerald-500/30 flex-shrink-0">
                     <img
-                      src={lastResult.owner.photo}
-                      alt={lastResult.owner.name}
+                      src={localResult.owner.photo}
+                      alt={localResult.owner.name}
                       className="w-full h-full object-cover"
                       onError={(e) => {
                         // Fallback if image fails to load
@@ -258,8 +317,8 @@ export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedIma
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-base font-bold text-white mb-1">{lastResult.owner.name}</p>
-                  <p className="text-sm text-zinc-400 truncate">{lastResult.owner.info}</p>
+                  <p className="text-base font-bold text-white mb-1">{localResult.owner.name}</p>
+                  <p className="text-sm text-zinc-400 truncate">{localResult.owner.info}</p>
                 </div>
               </div>
             </div>
