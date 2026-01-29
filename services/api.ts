@@ -1,10 +1,12 @@
 import { AnalysisResult } from '../types';
+import { getBackendUrl } from './apiConfig';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = getBackendUrl();
 
-export const analyzeVehicleImageLocal = async (file: File): Promise<AnalysisResult> => {
+export const analyzeVehicleImageLocal = async (file: File, location: string = 'UDUPI'): Promise<AnalysisResult> => {
   const formData = new FormData();
   formData.append('file', file);
+  formData.append('location', location);
 
   try {
     const response = await fetch(`${API_URL}/analyze`, {

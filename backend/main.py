@@ -18,9 +18,28 @@ import sqlalchemy
 import pandas as pd
 
 import hashlib
+from dotenv import load_dotenv
+from supabase import create_client, Client
+
+# Load environment variables
+load_dotenv()
+
+# Initialize Supabase
+supabase_url = os.environ.get("SUPABASE_URL")
+supabase_key = os.environ.get("SUPABASE_KEY")
+supabase: Client | None = None
+
+if supabase_url and supabase_key:
+    try:
+        supabase = create_client(supabase_url, supabase_key)
+        print("Supabase client initialized")
+    except Exception as e:
+        print(f"Failed to initialize Supabase: {e}")
+else:
+    print("Supabase credentials not found in environment")
 
 # Import Database Models
-from database import SessionLocal, engine, init_db, Owner, Vehicle, Detection, Correction
+from database import SessionLocal, engine, init_db, Owner, Vehicle, Detection, Correction, Transaction
 
 # Initialize DB Tables
 init_db()
@@ -37,7 +56,7 @@ app.add_middleware(
 )
 
 # Ensure uploads directory exists
-UPLOAD_DIR = "uploads"
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
@@ -94,6 +113,18 @@ async def create_owner(
     db.add(new_owner)
     db.commit()
     db.refresh(new_owner)
+
+    # Sync with Supabase (Owner)
+    if supabase:
+        try:
+            supabase.table("owners").insert({
+                "name": new_owner.name,
+                "contact_info": new_owner.contact_info,
+                "photo_path": new_owner.photo_path
+            }).execute()
+        except Exception as e:
+            print(f"Supabase Sync Error (Owner): {e}")
+
     return new_owner
 
 @app.get("/api/owners")
@@ -117,6 +148,31 @@ def create_vehicle(
         db.add(new_vehicle)
         db.commit()
         db.refresh(new_vehicle)
+        
+        # Sync with Supabase 
+        if supabase:
+            try:
+                # We need the Supabase Owner ID to link. 
+                # This is complex if IDs diverge. 
+                # Workaround: For this "Sync" feature, we'll try to look up the owner in Supabase by name/contact first?
+                # Or simpler: Just insert the vehicle with owner_id = NULL if we can't link, or try to pass the local ID and hope they match 
+                # (risky if they don't start at same seed). 
+                # BETTER APPROACH: Upon creating owner in Supabase, we should store that mapping or just do a lookup.
+                # Given the constraints and likely fresh DBs, let's try to lookup owner by name/contact.
+                
+                # Fetch likely owner from supabase
+                sb_owner_res = supabase.table("owners").select("id").eq("contact_info", owner.contact_info).execute()
+                sb_owner_id = sb_owner_res.data[0]['id'] if sb_owner_res.data else None
+                
+                if sb_owner_id:
+                     supabase.table("vehicles").insert({
+                        "license_plate": new_vehicle.license_plate,
+                        "make_model": new_vehicle.make_model,
+                        "owner_id": sb_owner_id
+                    }).execute()
+            except Exception as e:
+                print(f"Supabase Sync Error (Vehicle): {e}")
+
         return new_vehicle
     except Exception as e:
         db.rollback()
@@ -125,6 +181,66 @@ def create_vehicle(
 @app.get("/api/vehicles")
 def get_vehicles(db: Session = Depends(get_db)):
     return db.query(Vehicle).all()
+
+@app.put("/api/vehicles/{vehicle_id}")
+async def update_vehicle(
+    vehicle_id: int,
+    name: str = Form(None),
+    contact_info: str = Form(None),
+    license_plate: str = Form(None),
+    make_model: str = Form(None),
+    db: Session = Depends(get_db)
+):
+    vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    
+    owner = vehicle.owner
+    
+    if name is not None:
+        owner.name = name
+    if contact_info is not None:
+        owner.contact_info = contact_info
+    if license_plate is not None:
+        # Check if plate already exists for another vehicle
+        existing = db.query(Vehicle).filter(Vehicle.license_plate == license_plate.upper(), Vehicle.id != vehicle_id).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="License plate already registered to another vehicle")
+        vehicle.license_plate = license_plate.upper()
+    if make_model is not None:
+        vehicle.make_model = make_model
+        
+    db.commit()
+    db.refresh(vehicle)
+    db.refresh(owner)
+    
+    # Sync with Supabase if needed (omitted for brevity but recommended)
+    
+    return {"status": "success", "owner": owner, "vehicle": vehicle}
+
+@app.delete("/api/vehicles/{vehicle_id}")
+def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
+    vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    
+    owner = vehicle.owner
+    
+    # Delete image if exists
+    if owner.photo_path:
+        filename = os.path.basename(owner.photo_path)
+        full_path = os.path.join(UPLOAD_DIR, filename)
+        if os.path.exists(full_path):
+            try:
+                os.remove(full_path)
+            except Exception as e:
+                print(f"Error deleting file: {e}")
+
+    db.delete(vehicle)
+    db.delete(owner)
+    db.commit()
+    
+    return {"status": "success"}
 
 @app.get("/api/vehicles/{vehicle_id}/history")
 def get_vehicle_history(vehicle_id: int, db: Session = Depends(get_db)):
@@ -184,6 +300,28 @@ async def register_full(
         db.commit()
         db.refresh(new_owner)
         
+        # Sync to Supabase
+        if supabase:
+            try:
+                # 1. Insert Owner and get ID
+                owner_res = supabase.table("owners").insert({
+                    "name": new_owner.name,
+                    "contact_info": new_owner.contact_info,
+                    "photo_path": new_owner.photo_path
+                }).execute()
+                
+                sb_owner_id = owner_res.data[0]['id'] if owner_res.data else None
+                
+                # 2. Insert Vehicle linked to Owner
+                if sb_owner_id:
+                     supabase.table("vehicles").insert({
+                        "license_plate": new_vehicle.license_plate,
+                        "make_model": new_vehicle.make_model,
+                        "owner_id": sb_owner_id
+                    }).execute()
+            except Exception as e:
+                print(f"Supabase Sync Error (Register Full): {e}")
+        
         return {"status": "success", "owner": new_owner, "vehicle": new_vehicle}
 
     except Exception as e:
@@ -194,8 +332,12 @@ async def register_full(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/history")
-def get_history(db: Session = Depends(get_db)):
-    return db.query(Detection).order_by(Detection.timestamp.desc()).limit(50).all()
+def get_history(location: str = None, db: Session = Depends(get_db)):
+    query = db.query(Detection)
+    if location and location != 'ALL':
+        query = query.filter(Detection.location == location)
+    
+    return query.order_by(Detection.timestamp.desc()).limit(50).all()
 
 @app.get("/api/summary")
 def get_summary(db: Session = Depends(get_db)):
@@ -332,17 +474,173 @@ def get_vehicle_status(license_plate: str, db: Session = Depends(get_db)):
     detections = db.query(Detection).filter(
         (Detection.license_plate == license_plate.upper()) |
         (Detection.known_vehicle_id == (vehicle.id if vehicle else -1))
-    ).all()
+    ).order_by(Detection.timestamp.desc()).all()
 
     total_due = sum(d.toll_amount for d in detections)
     
+    # Serialize vehicle object
+    vehicle_data = None
+    if vehicle:
+        vehicle_data = {
+            "id": vehicle.id,
+            "license_plate": vehicle.license_plate,
+            "make_model": vehicle.make_model,
+            "owner_id": vehicle.owner_id,
+            "created_at": vehicle.created_at.isoformat() if vehicle.created_at else None
+        }
+    
+    # Serialize owner object
+    owner_data = None
+    if vehicle and vehicle.owner:
+        owner_data = {
+            "id": vehicle.owner.id,
+            "name": vehicle.owner.name,
+            "contact_info": vehicle.owner.contact_info,
+            "photo_path": vehicle.owner.photo_path,
+            "balance": vehicle.owner.balance,
+            "created_at": vehicle.owner.created_at.isoformat() if vehicle.owner.created_at else None
+        }
+    
+    # Serialize detections
+    history_data = []
+    for d in detections:
+        history_data.append({
+            "id": d.id,
+            "vehicle_type": d.vehicle_type,
+            "license_plate": d.license_plate,
+            "confidence": d.confidence,
+            "timestamp": d.timestamp.isoformat() if d.timestamp else None,
+            "toll_amount": d.toll_amount,
+            "status": d.status,
+            "image_path": d.image_path
+        })
+    
     return {
         "found": vehicle is not None,
-        "vehicle": vehicle,
-        "owner": vehicle.owner if vehicle else None,
+        "vehicle": vehicle_data,
+        "owner": owner_data,
         "total_due": total_due,
-        "history_count": len(detections)
+        "balance": vehicle.owner.balance if vehicle and vehicle.owner else 0,
+        "history_count": len(detections),
+        "history": history_data
     }
+
+@app.post("/api/owner/add_balance")
+def add_owner_balance(
+    license_plate: str = Form(...),
+    amount: int = Form(...),
+    description: str = Form("Manual Top-up"),
+    type: str = Form("TOPUP"),
+    db: Session = Depends(get_db)
+):
+    vehicle = db.query(Vehicle).filter(Vehicle.license_plate == license_plate.upper()).first()
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    
+    owner = vehicle.owner
+    owner.balance += amount
+    
+    # Record Transaction
+    tx = Transaction(
+        owner_id=owner.id,
+        amount=amount,
+        type=type,
+        description=description,
+        timestamp=datetime.datetime.utcnow()
+    )
+    db.add(tx)
+    
+    db.commit()
+    db.refresh(owner)
+    return {"status": "success", "new_balance": owner.balance}
+
+@app.post("/api/owner/resolve_low_balance")
+def resolve_low_balance(
+    detection_id: int = Form(...),
+    action: str = Form(...), # 'pay_cash' or 'warning'
+    db: Session = Depends(get_db)
+):
+    detection = db.query(Detection).filter(Detection.id == detection_id).first()
+    if not detection:
+        raise HTTPException(status_code=404, detail="Detection not found")
+    
+    # If already verified, do nothing
+    if detection.status == 'verified':
+        return {"status": "success", "message": "Already verified"}
+
+    vehicle = db.query(Vehicle).filter(Vehicle.license_plate == detection.license_plate).first()
+    
+    if action == 'pay_cash':
+        # Simulate cash payment: Add to balance, then deduct
+        if vehicle:
+            # 1. Credit Cash
+            vehicle.owner.balance += detection.toll_amount
+            tx_credit = Transaction(
+                owner_id=vehicle.owner.id,
+                amount=detection.toll_amount,
+                type='CASH_PAYMENT',
+                description=f"Cash payment at Toll Gate for {detection.license_plate}",
+                timestamp=datetime.datetime.utcnow()
+            )
+            db.add(tx_credit)
+
+            # 2. Debit Toll
+            vehicle.owner.balance -= detection.toll_amount
+            tx_debit = Transaction(
+                owner_id=vehicle.owner.id,
+                amount=-detection.toll_amount,
+                type='TOLL',
+                description=f"Toll deduction (Cash) for {detection.license_plate}",
+                timestamp=datetime.datetime.utcnow()
+            )
+            db.add(tx_debit)
+            
+            print(f"DEBUG: Cash Pay - Balanced adjusted for {vehicle.license_plate}")
+        
+        detection.status = 'verified'
+        
+    elif action == 'warning':
+        # Deduct anyway (negative balance) and mark verified
+        if vehicle:
+            vehicle.owner.balance -= detection.toll_amount
+            # Log warning (todo: dedicated warning table)
+            print(f"WARNING ISSUED for {vehicle.license_plate}. Balance is now {vehicle.owner.balance}")
+            
+        detection.status = 'verified' # Allow to pass
+        # Maybe add a note or flag? 
+        detection.confidence += " [WARNING]" # Hacky way to store it if no column, or use status
+        
+    db.commit()
+    return {"status": "success", "action": action}
+
+@app.post("/api/admin/adjust_balance")
+def admin_adjust_balance(
+    owner_id: int = Form(...),
+    amount: int = Form(...), # Can be negative
+    description: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    owner = db.query(Owner).filter(Owner.id == owner_id).first()
+    if not owner:
+        raise HTTPException(status_code=404, detail="Owner not found")
+    
+    owner.balance += amount
+    
+    tx = Transaction(
+        owner_id=owner.id,
+        amount=amount,
+        type='ADMIN_ADJUST',
+        description=description,
+        timestamp=datetime.datetime.utcnow()
+    )
+    db.add(tx)
+    db.commit()
+    return {"status": "success", "new_balance": owner.balance}
+
+@app.get("/api/owners/{owner_id}/transactions")
+def get_transactions(owner_id: int, db: Session = Depends(get_db)):
+    txs = db.query(Transaction).filter(Transaction.owner_id == owner_id).order_by(Transaction.timestamp.desc()).all()
+    return txs
 
 @app.post("/api/import")
 async def import_data(file: UploadFile = File(...), db: Session = Depends(get_db)):
@@ -422,7 +720,11 @@ def get_image_hash(image_bytes):
     return hashlib.sha256(image_bytes).hexdigest()
 
 @app.post("/analyze")
-async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def analyze_image(
+    location: str = Form("UDUPI"), # Default to UDUPI for backward compat
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db)
+):
     try:
         # Read image
         contents = await file.read()
@@ -635,7 +937,7 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
                                      # text_threshold: Lower confidence acceptance (default 0.7, lowering for bad inputs)
                                      plate_ocr = reader.readtext(thresh_plate, detail=1, 
                                                                  allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-                                                                 mag_ratio=3.0,
+                                                                 mag_ratio=1.5,
                                                                  text_threshold=0.6)
                                      
                                      for (bbox, text, prob) in plate_ocr:
@@ -662,7 +964,7 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
                      
                      crop_result = reader.readtext(processed_crop, detail=1, 
                                                    allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-                                                   mag_ratio=2.5)
+                                                   mag_ratio=1.5)
                      for (bbox, text, prob) in crop_result:
                           cleaned = ''.join(e for e in text if e.isalnum()).upper()
                           candidates.append({'text': cleaned, 'source': 'car_crop', 'prob': prob, 'score': score_plate(cleaned)})
@@ -671,16 +973,16 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
         # Only run if we don't have a high scoring candidate yet? 
         # For now, let's always run or run if max score < 50
         
-        curr_max_score = -100
         if candidates:
             curr_max_score = max(c['score'] for c in candidates)
             
-        if curr_max_score < 50:
+        # Only fallback if we don't have a good candidate
+        if curr_max_score < 60:
              print("DEBUG: Weak detection in crops, trying full image scan...")
-             # Resize full image for speed/consistency (1080p height)
-             target_h = 1080
+             # Resize full image for speed - 720p is usually enough
+             target_h = 720
              scale = 1.0
-             if img_cv.shape[0] < target_h:
+             if img_cv.shape[0] > target_h:
                   scale = target_h / img_cv.shape[0]
                   display_h = int(img_cv.shape[0] * scale)
                   display_w = int(img_cv.shape[1] * scale)
@@ -691,7 +993,7 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
              processed_full = preprocess_image(scan_img)
              full_result = reader.readtext(processed_full, detail=1,
                                            allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-                                           mag_ratio=2.0)
+                                           mag_ratio=1.0)
              
              for (bbox, text, prob) in full_result:
                   cleaned = ''.join(e for e in text if e.isalnum()).upper()
@@ -751,6 +1053,29 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
         rates = {'Car': 50, 'Motorcycle': 30, 'Bus': 100, 'Truck': 150}
         toll_amount = rates.get(vehicle_type, 50)
 
+        balance_status = 'ok'
+        allowed_to_pass = True
+
+        # Deduct balance if vehicle is registered
+        if known_vehicle:
+            if known_vehicle.owner.balance < toll_amount:
+                balance_status = 'low_balance'
+                allowed_to_pass = False
+                status = 'pending_payment' # New status for internal tracking, allows frontend to know
+                print(f"DEBUG: Low balance for {known_vehicle.owner.name}. Balance: {known_vehicle.owner.balance}, Required: {toll_amount}")
+            else:
+                known_vehicle.owner.balance -= toll_amount
+                print(f"DEBUG: Deducted {toll_amount} from owner {known_vehicle.owner.name}. New balance: {known_vehicle.owner.balance}")
+                
+                 # Record TOLL Transaction
+                tx = Transaction(
+                    owner_id=known_vehicle.owner.id,
+                    amount=-toll_amount,
+                    type='TOLL',
+                    description=f"Toll deduction for {license_plate} at {location}",
+                    timestamp=datetime.datetime.utcnow()
+                )
+                db.add(tx)
 
         
         print(f"DEBUG: Analyzed {license_plate} (Conf: {confidence}). Status: {status}")
@@ -764,7 +1089,8 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
             is_authorized=is_authorized,
             toll_amount=toll_amount,
             status=status,
-            image_path=db_image_path
+            image_path=db_image_path,
+            location=location
         )
         db.add(new_detection)
         db.commit()
@@ -779,7 +1105,9 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
             "status": status,
             "color": vehicle_color, 
             "makeModel": f"Detected {vehicle_color} {vehicle_type}", 
-            "description": f"A {vehicle_color.lower()} {vehicle_type.lower()} detected with {(confidence*100):.1f}% confidence."
+            "description": f"A {vehicle_color.lower()} {vehicle_type.lower()} detected with {(confidence*100):.1f}% confidence.",
+            "balanceStatus": balance_status,
+            "allowedToPass": allowed_to_pass
         }
 
         if known_vehicle:
@@ -861,6 +1189,61 @@ def submit_correction(
 
     db.commit()
     return {"status": "success", "message": "Correction saved and learned."}
+
+@app.get("/api/reports/monthly")
+def get_monthly_report(
+    month: int = None,
+    year: int = None,
+    location: str = None,
+    db: Session = Depends(get_db)
+):
+    now = datetime.datetime.utcnow()
+    if not month: month = now.month
+    if not year: year = now.year
+
+    # Start and End of Month
+    start_date = datetime.datetime(year, month, 1)
+    if month == 12:
+        end_date = datetime.datetime(year + 1, 1, 1)
+    else:
+        end_date = datetime.datetime(year, month + 1, 1)
+
+    query = db.query(Detection).filter(
+        Detection.timestamp >= start_date,
+        Detection.timestamp < end_date
+    )
+
+    if location and location != 'ALL':
+        query = query.filter(Detection.location == location)
+
+    detections = query.all()
+
+    total_revenue = sum(d.toll_amount for d in detections)
+    total_visitors = len(detections)
+    
+    # Calculate daily breakdown
+    daily_stats = {}
+    for d in detections:
+        day_str = d.timestamp.date().isoformat()
+        if day_str not in daily_stats:
+            daily_stats[day_str] = {"revenue": 0, "visitors": 0}
+        daily_stats[day_str]["revenue"] += d.toll_amount
+        daily_stats[day_str]["visitors"] += 1
+        
+    daily_list = [
+        {"date": date, "revenue": stats["revenue"], "visitors": stats["visitors"]}
+        for date, stats in daily_stats.items()
+    ]
+    daily_list.sort(key=lambda x: x['date']) # Sort by date
+
+    return {
+        "month": month,
+        "year": year,
+        "location": location or "ALL",
+        "total_revenue": total_revenue,
+        "total_visitors": total_visitors,
+        "daily_breakdown": daily_list
+    }
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

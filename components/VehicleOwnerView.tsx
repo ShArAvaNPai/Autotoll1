@@ -1,351 +1,490 @@
 import React, { useState } from 'react';
-import { Car, Search, CheckCircle, AlertCircle, Calendar, CreditCard, ArrowLeft, Clock, MapPin, Shield, Activity, ChevronRight, User } from 'lucide-react';
+import { Car, Search, CheckCircle, AlertCircle, Calendar, CreditCard, ArrowLeft, Clock, MapPin, Shield, Activity, ChevronRight, User, X, Mail, Phone, ExternalLink, History } from 'lucide-react';
 import { PaymentModal } from './PaymentModal';
+import { getBackendUrl } from '../services/apiConfig';
 
 interface VehicleOwnerViewProps {
     onBack: () => void;
 }
 
 export function VehicleOwnerView({ onBack }: VehicleOwnerViewProps) {
-    const [activeTab, setActiveTab] = useState<'status' | 'register'>('status');
-
-    return (
-        <div className="min-h-screen bg-black text-zinc-100">
-            {/* Header */}
-            <div className="border-b border-white/5 bg-black/40 backdrop-blur-md sticky top-0 z-20">
-                <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <button
-                            onClick={onBack}
-                            className="p-2 -ml-2 text-zinc-500 hover:text-white transition-colors rounded-full hover:bg-white/10"
-                        >
-                            <ArrowLeft size={20} />
-                        </button>
-                        <div className="font-bold text-lg tracking-tight flex items-center gap-2">
-                            <div className="bg-emerald-500/10 p-1.5 rounded-lg">
-                                <Car className="text-emerald-500" size={20} />
-                            </div>
-                            <span className="bg-gradient-to-r from-white to-zinc-500 bg-clip-text text-transparent">Owner Portal</span>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center border border-zinc-700">
-                            <User size={16} className="text-zinc-400" />
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="max-w-5xl mx-auto px-6 py-8">
-                {/* Tabs */}
-                <div className="flex p-1 bg-zinc-900/50 backdrop-blur rounded-xl mb-8 border border-white/5 w-fit">
-                    <button
-                        onClick={() => setActiveTab('status')}
-                        className={`px-6 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'status' ? 'bg-zinc-800 text-white shadow-sm ring-1 ring-white/10' : 'text-zinc-500 hover:text-zinc-300'
-                            }`}
-                    >
-                        My Vehicle
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('register')}
-                        className={`px-6 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'register' ? 'bg-zinc-800 text-white shadow-sm ring-1 ring-white/10' : 'text-zinc-500 hover:text-zinc-300'
-                            }`}
-                    >
-                        Register New
-                    </button>
-                </div>
-
-                {activeTab === 'status' ? <StatusCheck /> : <OwnerRegistration />}
-            </div>
-        </div>
-    );
-}
-
-function StatusCheck() {
     const [plate, setPlate] = useState("");
     const [result, setResult] = useState<any>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [showPayModal, setShowPayModal] = useState(false);
+    const [showUnregisteredModal, setShowUnregisteredModal] = useState(false);
+    React.useEffect(() => {
+        console.log("VehicleOwnerView mounted");
+        console.log("Window Location:", window.location.href);
+        console.log("Hostname:", window.location.hostname);
+        console.log("Backend URL determined as:", getBackendUrl());
+    }, []);
 
-    const handleCheck = async (e: React.FormEvent) => {
-        e.preventDefault();
+    React.useEffect(() => {
+        if (result) {
+            console.log("Result updated:", result);
+        }
+    }, [result]);
+
+
+    const handleCheck = async (e?: React.FormEvent, manualPlate?: string) => {
+        if (e) e.preventDefault();
+        const searchPlate = manualPlate || plate;
+        console.log("handleCheck triggered for plate:", searchPlate);
+        if (!searchPlate) return;
+
         setLoading(true);
         setError("");
         setResult(null);
+        setShowUnregisteredModal(false);
 
         try {
-            const res = await fetch(`http://localhost:8000/api/vehicle/status/${plate}`);
+            const sanitizedPlate = searchPlate.trim().replace(/\s+/g, '').toUpperCase();
+            const url = `${getBackendUrl()}/api/vehicle/status/${sanitizedPlate}`;
+
+            console.log("Searching for vehicle:", sanitizedPlate, "at", url);
+
+            const res = await fetch(url);
+            console.log("Response status:", res.status, res.ok);
+
             if (res.ok) {
                 const data = await res.json();
-                setResult(data);
+                console.log("Data received:", data);
+                if (data.found) {
+                    setResult(data);
+                    console.log("Result state updated with data");
+                } else {
+                    console.log("Vehicle not found in database");
+                    setPlate(sanitizedPlate);
+                    setShowUnregisteredModal(true);
+                }
             } else {
-                setError("Could not fetch details. Please check the License Plate.");
+                const errorText = await res.text();
+                console.error("Fetch failed with status:", res.status, errorText);
+                setError(`Could not fetch details (Status: ${res.status}). Please check the License Plate.`);
             }
-        } catch (e) {
-            setError("Network Error. Is the backend running?");
+        } catch (e: any) {
+            console.error("Search Error:", e);
+            setError(`Network Error: ${e.message || "Is the backend running?"}`);
         } finally {
             setLoading(false);
         }
     };
 
-    const handlePaymentSuccess = () => {
+    const handlePaymentSuccess = (amount: number) => {
         setShowPayModal(false);
         setResult((prev: any) => ({
             ...prev,
-            total_due: 0
+            balance: (prev.balance || 0) + amount
         }));
     };
 
     return (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {!result ? (
-                <div className="max-w-xl mx-auto mt-12">
-                    <div className="text-center space-y-3 mb-8">
-                        <div className="inline-flex items-center justify-center p-4 bg-emerald-500/10 rounded-full mb-2 ring-1 ring-emerald-500/20">
-                            <Shield className="text-emerald-500" size={32} />
+        <div className="min-h-screen bg-black text-zinc-100 overflow-x-hidden relative">
+            {/* Background Orbs */}
+            <div className="fixed inset-0 pointer-events-none overflow-hidden">
+                <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-emerald-500/5 blur-[120px] rounded-full animate-pulse" />
+                <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-500/5 blur-[120px] rounded-full" />
+            </div>
+
+            {/* Header */}
+            <div className="border-b border-white/5 bg-black/40 backdrop-blur-xl sticky top-0 z-50">
+                <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+                    <div className="flex items-center gap-6">
+                        <button
+                            onClick={onBack}
+                            className="p-2.5 text-zinc-500 hover:text-white transition-all rounded-full hover:bg-white/5 border border-transparent hover:border-white/10 group"
+                        >
+                            <ArrowLeft size={20} className="group-hover:-translate-x-0.5 transition-transform" />
+                        </button>
+                        <div className="font-bold text-xl tracking-tight flex items-center gap-3">
+                            <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20">
+                                <Car className="text-emerald-500" size={20} />
+                            </div>
+                            <span className="bg-gradient-to-r from-white via-white to-zinc-500 bg-clip-text text-transparent">Owner Portal</span>
                         </div>
-                        <h2 className="text-3xl font-bold text-white tracking-tight">Welcome Back</h2>
-                        <p className="text-zinc-400">Enter your vehicle's license plate to access your dashboard.</p>
                     </div>
 
-                    <form onSubmit={handleCheck} className="relative">
-                        <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-zinc-500" size={24} />
-                        <input
-                            type="text"
-                            required
-                            placeholder="MH12 AB 1234"
-                            value={plate}
-                            onChange={e => setPlate(e.target.value.toUpperCase())}
-                            className="w-full bg-zinc-900/80 border border-zinc-800 rounded-2xl py-5 pl-14 pr-6 text-2xl text-center font-mono placeholder:font-sans focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all shadow-xl"
-                        />
-                        <button
-                            type="submit"
-                            disabled={loading || !plate}
-                            className="absolute right-3 top-3 bottom-3 bg-zinc-800 hover:bg-emerald-600 text-zinc-300 hover:text-white px-6 rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
-                        >
-                            {loading ? <Clock className="animate-spin" /> : <ChevronRight size={24} />}
-                        </button>
-                    </form>
-
-                    {error && (
-                        <div className="mt-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm flex items-center justify-center gap-2 animate-in fade-in">
-                            <AlertCircle size={16} /> {error}
+                    <div className="flex items-center gap-4">
+                        {result && (
+                            <button
+                                onClick={() => {
+                                    setResult(null);
+                                    setPlate("");
+                                }}
+                                className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-zinc-400 hover:text-white hover:bg-white/10 transition-all flex items-center gap-2"
+                            >
+                                <Search size={14} />
+                                Change Vehicle
+                            </button>
+                        )}
+                        <div className="hidden md:flex items-center gap-6 text-sm text-zinc-500 font-medium">
+                            <span className="flex items-center gap-2 px-3 py-1 bg-zinc-900/50 rounded-full border border-white/5">
+                                <Shield size={14} className="text-emerald-500" />
+                                Secure Access
+                            </span>
                         </div>
-                    )}
+                    </div>
                 </div>
-            ) : (
-                <div className="space-y-6">
-                    {/* Dashboard Grid */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* 1. Vehicle Card */}
-                        <div className="lg:col-span-2 bg-zinc-900/50 border border-white/5 rounded-3xl p-8 relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-                                <Car size={200} />
+            </div>
+
+            <main className="max-w-7xl mx-auto px-6 py-12 relative z-10">
+                {!result ? (
+                    <div className="max-w-xl mx-auto mt-20 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                        <div className="text-center space-y-6 mb-12">
+                            <div className="inline-flex items-center justify-center p-6 bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 rounded-3xl mb-4 ring-1 ring-emerald-500/20 shadow-2xl shadow-emerald-500/10">
+                                <Shield className="text-emerald-400" size={48} />
                             </div>
-
-                            <div className="relative z-10">
-                                <div className="flex items-start justify-between mb-8">
-                                    <div>
-                                        <p className="text-zinc-500 font-medium uppercase tracking-wider text-xs mb-2">Vehicle Profile</p>
-                                        <h2 className="text-4xl font-mono font-bold text-white tracking-tight">{result.vehicle.license_plate}</h2>
-                                        <p className="text-xl text-zinc-400 mt-1">{result.vehicle.make_model}</p>
-                                    </div>
-                                    <div className="bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-xs font-medium border border-emerald-500/20 flex items-center gap-1">
-                                        <Activity size={12} /> Active
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-8 pt-8 border-t border-white/5">
-                                    <div>
-                                        <p className="text-zinc-500 text-xs uppercase mb-1">Owner</p>
-                                        <p className="text-white font-medium">{result.owner?.name || "Unknown"}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-zinc-500 text-xs uppercase mb-1">Contact</p>
-                                        <p className="text-white font-medium">{result.owner?.contact_info || "N/A"}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-zinc-500 text-xs uppercase mb-1">Registered</p>
-                                        <p className="text-white font-medium">Jan 2024</p>
-                                    </div>
-                                </div>
+                            <div>
+                                <h2 className="text-4xl font-bold text-white tracking-tight mb-3">Welcome Back</h2>
+                                <p className="text-zinc-400 text-lg">Enter your vehicle's license plate to manage your toll account.</p>
                             </div>
                         </div>
 
-                        {/* 2. Balance / Payment Card */}
-                        <div className="bg-gradient-to-br from-zinc-900 to-black border border-white/5 rounded-3xl p-8 flex flex-col justify-between relative overflow-hidden">
-                            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent"></div>
+                        <form onSubmit={(e) => handleCheck(e)} className="relative group">
+                            <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500/20 to-blue-500/20 rounded-[21px] blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+                            <div className="relative">
+                                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-zinc-500" size={24} />
+                                <input
+                                    type="text"
+                                    required
+                                    placeholder="MH12 AB 1234"
+                                    value={plate}
+                                    autoFocus
+                                    onChange={e => setPlate(e.target.value.toUpperCase())}
+                                    className="w-full bg-zinc-900/60 backdrop-blur-xl border border-white/10 rounded-[20px] py-6 pl-16 pr-8 text-2xl text-center font-mono placeholder:font-sans placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500/50 focus:ring-4 focus:ring-emerald-500/10 transition-all text-white"
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={loading || !plate}
+                                    className="absolute right-3 top-3 bottom-3 bg-emerald-600 hover:bg-emerald-500 text-white px-8 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 group/btn shadow-lg shadow-emerald-900/40"
+                                >
+                                    {loading ? <Clock className="animate-spin" /> : (
+                                        <>
+                                            <span>Continue</span>
+                                            <ChevronRight size={20} className="group-hover/btn:translate-x-1 transition-transform" />
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
 
-                            <div>
-                                <p className="text-zinc-500 font-medium uppercase tracking-wider text-xs mb-2">Current Balance</p>
-                                <div className="text-5xl font-bold text-white tracking-tight flex items-start gap-1">
-                                    <span className="text-2xl mt-2 text-zinc-500">₹</span>
-                                    {result.total_due}
+                        <div className="mt-6 text-center">
+                            <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest">
+                                Try Sample Plate: <button type="button" onClick={() => handleCheck(undefined, "KA20HP2405")} className="text-emerald-500/50 hover:text-emerald-400 transition-colors">KA20HP2405</button>
+                            </p>
+                        </div>
+
+                        {error && (
+                            <div className="mt-8 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-sm flex items-center justify-center gap-3 animate-in fade-in zoom-in-95">
+                                <AlertCircle size={18} /> {error}
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 space-y-8">
+                        {/* Top Stats Overview */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div className="md:col-span-2 bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl p-8 flex flex-col justify-between group overflow-hidden relative">
+                                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                                <div>
+                                    <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-4">Total Balance</p>
+                                    <div className="flex items-baseline gap-2">
+                                        <span className="text-3xl font-medium text-emerald-500">₹</span>
+                                        <span className="text-6xl font-bold text-white tracking-tighter">{result.balance || 0}</span>
+                                    </div>
                                 </div>
-                                <p className="text-zinc-500 text-sm mt-2">
-                                    {result.total_due > 0 ? "Outstanding toll charges." : "All caught up! No dues."}
+                                <div className="mt-6 flex items-center gap-4 relative z-10">
+                                    <button
+                                        onClick={() => {
+                                            console.log("Pay Now Clicked");
+                                            setShowPayModal(true);
+                                        }}
+                                        className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-4 rounded-xl font-bold transition-all shadow-lg shadow-emerald-900/30 flex items-center justify-center gap-2 group/pay"
+                                    >
+                                        <CreditCard size={18} />
+                                        Pay Now
+                                        <ChevronRight size={16} className="group-hover/pay:translate-x-1 transition-transform" />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl p-8 flex flex-col justify-between">
+                                <div>
+                                    <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-4">Pending Dues</p>
+                                    <div className="flex items-baseline gap-2">
+                                        <span className="text-2xl font-medium text-zinc-500">₹</span>
+                                        <span className="text-4xl font-bold text-white tracking-tight">{result.total_due || 0}</span>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-zinc-500 mt-4 flex items-center gap-2">
+                                    <InfoIcon size={14} className="text-zinc-400" />
+                                    Next deduction in 24h
                                 </p>
                             </div>
 
-                            <button
-                                onClick={() => result.total_due > 0 && setShowPayModal(true)}
-                                disabled={result.total_due <= 0}
-                                className={`w-full py-4 mt-8 font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 ${result.total_due > 0
-                                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20 hover:scale-[1.02]'
-                                        : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                                    }`}
-                            >
-                                <CreditCard size={20} />
-                                {result.total_due > 0 ? "Pay Now" : "No Dues"}
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* 3. History Timeline (Simulated for Demo) */}
-                    <div className="bg-zinc-900/30 border border-white/5 rounded-3xl p-8">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-lg font-bold text-white">Recent Activity</h3>
-                            <button className="text-sm text-emerald-400 hover:text-emerald-300">View Full History</button>
-                        </div>
-
-                        <div className="space-y-4">
-                            {[...Array(3)].map((_, i) => (
-                                <div key={i} className="flex items-center gap-4 group p-4 hover:bg-white/5 rounded-xl transition-colors border border-transparent hover:border-white/5">
-                                    <div className="w-12 h-12 bg-zinc-950 rounded-lg flex items-center justify-center border border-zinc-800 text-zinc-400 group-hover:text-emerald-400 group-hover:border-emerald-500/30 transition-all">
-                                        <MapPin size={20} />
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="flex justify-between mb-1">
-                                            <h4 className="font-medium text-white">Toll Plaza #{3 - i}</h4>
-                                            <span className="text-emerald-400 font-mono">₹50.00</span>
+                            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl p-8 flex flex-col justify-between">
+                                <div>
+                                    <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-4">Total Scans</p>
+                                    <div className="text-4xl font-bold text-white tracking-tight">{result.history_count || 0}</div>
+                                </div>
+                                <div className="mt-4 flex -space-x-2">
+                                    {[1, 2, 3].map(i => (
+                                        <div key={i} className="w-8 h-8 rounded-full border-2 border-zinc-900 bg-zinc-800 flex items-center justify-center text-[10px] text-zinc-500 first:bg-emerald-500/20 first:border-emerald-500/50">
+                                            {i === 1 ? <CheckCircle size={12} className="text-emerald-500" /> : i}
                                         </div>
-                                        <div className="flex justify-between">
-                                            <p className="text-sm text-zinc-500">NH-48, Lane 2</p>
-                                            <p className="text-xs text-zinc-600">Today, {10 + i}:30 AM</p>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                            {/* Profile and Vehicle Details */}
+                            <div className="lg:col-span-4 space-y-8">
+                                {/* Owner Profile Card */}
+                                <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl p-8 overflow-hidden relative group">
+                                    <div className="flex flex-col items-center text-center space-y-6">
+                                        <div className="relative">
+                                            <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full blur-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-700" />
+                                            <div className="relative w-32 h-32 rounded-[2.5rem] bg-zinc-800 border-4 border-white/10 overflow-hidden shadow-2xl flex items-center justify-center">
+                                                {result.owner?.photo_path ? (
+                                                    <img
+                                                        src={`${getBackendUrl()}${result.owner.photo_path}`}
+                                                        alt={result.owner?.name || "Owner"}
+                                                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                                    />
+                                                ) : (
+                                                    <User size={48} className="text-zinc-600" />
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h3 className="text-2xl font-bold text-white mb-2">{result.owner?.name || "Premium User"}</h3>
+                                            <div className="flex flex-wrap justify-center gap-2">
+                                                <span className="px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-full text-[10px] font-bold uppercase tracking-wider border border-emerald-500/20">Verified Owner</span>
+                                                <span className="px-3 py-1 bg-white/5 text-zinc-400 rounded-full text-[10px] font-bold uppercase tracking-wider border border-white/10">ID: #{result.owner?.id || result.vehicle?.owner_id || "77"}</span>
+                                            </div>
+                                        </div>
+
+                                        {result.owner && (
+                                            <div className="w-full space-y-4 pt-4 border-t border-white/5">
+                                                <div className="flex items-center gap-4 px-4 py-3 bg-white/5 rounded-2xl border border-white/5 transition-colors hover:bg-white/10">
+                                                    <Phone className="text-zinc-500 shrink-0" size={18} />
+                                                    <div className="text-left">
+                                                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Phone</p>
+                                                        <p className="text-sm font-medium text-zinc-200">{result.owner?.contact_info || "Not shared"}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-4 px-4 py-3 bg-white/5 rounded-2xl border border-white/5 transition-colors hover:bg-white/10">
+                                                    <Mail className="text-zinc-500 shrink-0" size={18} />
+                                                    <div className="text-left">
+                                                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Email</p>
+                                                        <p className="text-sm font-medium text-zinc-200">{(result.owner?.name || "User").toLowerCase().replace(/ /g, '.')}@autotoll.ai</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Vehicle Identity Card */}
+                                <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl p-8 relative overflow-hidden group">
+                                    <div className="flex items-center gap-4 mb-8">
+                                        <div className="w-12 h-12 rounded-2xl bg-zinc-800 border border-white/10 flex items-center justify-center text-zinc-400 group-hover:scale-110 transition-transform">
+                                            <Car size={24} />
+                                        </div>
+                                        <h3 className="text-xl font-bold text-white">Vehicle Identity</h3>
+                                    </div>
+
+                                    <div className="space-y-6">
+                                        <div className="p-4 bg-zinc-950 border border-white/5 rounded-2xl">
+                                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">License Plate</p>
+                                            <p className="text-3xl font-mono font-bold text-white tracking-widest">{result.vehicle?.license_plate}</p>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Make & Model</p>
+                                                <p className="text-sm font-bold text-zinc-200">{result.vehicle?.make_model}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Reg. Date</p>
+                                                <p className="text-sm font-bold text-zinc-200">
+                                                    {result.vehicle?.created_at ? new Date(result.vehicle.created_at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : 'N/A'}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            )}
+                            </div>
 
-            {showPayModal && (
-                <PaymentModal
-                    totalDue={result.total_due}
-                    plate={result.vehicle.license_plate}
-                    onClose={() => setShowPayModal(false)}
-                    onSuccess={handlePaymentSuccess}
-                />
-            )}
+                            {/* Activity Feed */}
+                            <div className="lg:col-span-8 flex flex-col space-y-6">
+                                <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl flex-1 flex flex-col overflow-hidden">
+                                    <div className="p-8 border-b border-white/5 flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <div className="p-2 bg-blue-500/10 rounded-xl">
+                                                <History className="text-blue-500" size={24} />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-xl font-bold text-white">Toll Activity</h3>
+                                                <p className="text-xs text-zinc-500 pt-0.5">Real-time scan history for your vehicle</p>
+                                            </div>
+                                        </div>
+                                        <div className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                                            {result.history_count || 0} Records
+                                        </div>
+                                    </div>
+
+                                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                                        {result.history && result.history.length > 0 ? (
+                                            <div className="divide-y divide-white/5">
+                                                {result.history.map((record: any) => (
+                                                    <div key={record.id} className="p-6 hover:bg-white/5 transition-colors group">
+                                                        <div className="flex items-center gap-6">
+                                                            {/* Mini Map/Location Placeholder */}
+                                                            <div className="w-16 h-16 rounded-2xl bg-zinc-800 border border-white/10 flex items-center justify-center text-zinc-500 shrink-0 group-hover:scale-105 transition-transform overflow-hidden">
+                                                                {record.image_path ? (
+                                                                    <img src={`${getBackendUrl()}${record.image_path}`} className="w-full h-full object-cover opacity-50 group-hover:opacity-100 transition-opacity" alt="Scan" />
+                                                                ) : (
+                                                                    <MapPin size={24} />
+                                                                )}
+                                                            </div>
+
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex justify-between items-start mb-2">
+                                                                    <div>
+                                                                        <h4 className="font-bold text-white text-lg">Electronic Toll Gate</h4>
+                                                                        <div className="flex items-center gap-3 mt-1">
+                                                                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest flex items-center gap-1">
+                                                                                <Clock size={10} />
+                                                                                {new Date(record.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                            </span>
+                                                                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest flex items-center gap-1">
+                                                                                <Calendar size={10} />
+                                                                                {new Date(record.timestamp).toLocaleDateString([], { day: '2-digit', month: 'short' })}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <div className="text-xl font-bold font-mono text-white">₹{(record.toll_amount || 0).toFixed(2)}</div>
+                                                                        <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded ${record.status === 'verified' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-400'}`}>
+                                                                            {record.status}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                                                                    <span>{record.vehicle_type}</span>
+                                                                    <span>•</span>
+                                                                    <span className="flex items-center gap-1">
+                                                                        AI Confidence: {record.confidence ? `${(parseFloat(record.confidence) * 100).toFixed(0)}%` : 'Manual'}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="hidden md:flex flex-col items-center">
+                                                                <button className="p-2 text-zinc-600 hover:text-white transition-colors">
+                                                                    <ExternalLink size={18} />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="h-full flex flex-col items-center justify-center text-zinc-500 space-y-4 py-20">
+                                                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center">
+                                                    <History size={32} className="opacity-20" />
+                                                </div>
+                                                <p className="font-medium">No activity history found for this vehicle.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {showPayModal && (
+                            <PaymentModal
+                                plate={result.vehicle?.license_plate || plate}
+                                initialAmount={(result.total_due > 0 ? result.total_due : 100)}
+                                onClose={() => setShowPayModal(false)}
+                                onSuccess={handlePaymentSuccess}
+                            />
+                        )}
+
+                        {/* Unregistered Vehicle Modal */}
+                        {showUnregisteredModal && (
+                            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300">
+                                <div className="bg-zinc-900 border border-white/10 rounded-[32px] w-full max-w-sm p-10 relative shadow-2xl overflow-hidden group">
+                                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-red-500" />
+                                    <button
+                                        onClick={() => setShowUnregisteredModal(false)}
+                                        className="absolute top-6 right-6 p-2 text-zinc-500 hover:text-white transition-all bg-white/5 rounded-full hover:rotate-90"
+                                    >
+                                        <X size={20} />
+                                    </button>
+
+                                    <div className="flex flex-col items-center text-center space-y-6">
+                                        <div className="w-20 h-20 bg-amber-500/10 rounded-[2rem] flex items-center justify-center border border-amber-500/20 shadow-2xl shadow-amber-500/10 group-hover:scale-110 transition-transform duration-500">
+                                            <AlertCircle size={40} className="text-amber-500" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-2xl font-bold text-white mb-3">Not Registered</h3>
+                                            <p className="text-zinc-400 text-sm leading-relaxed">
+                                                The license plate <span className="text-white font-mono font-bold bg-white/10 px-2 py-0.5 rounded">{plate}</span> is not found in our registry. Please contact admin for registration.
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() => setShowUnregisteredModal(false)}
+                                            className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-2xl transition-all shadow-xl active:scale-95"
+                                        >
+                                            Got it
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <style dangerouslySetInnerHTML={{
+                            __html: `
+                            .custom-scrollbar::-webkit-scrollbar {
+                                width: 6px;
+                            }
+                            .custom-scrollbar::-webkit-scrollbar-track {
+                                background: transparent;
+                            }
+                            .custom-scrollbar::-webkit-scrollbar-thumb {
+                                background: rgba(255, 255, 255, 0.05);
+                                border-radius: 10px;
+                            }
+                            .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                                background: rgba(255, 255, 255, 0.1);
+                            }
+                        `}} />
+                    </div>
+                )}
+            </main>
         </div>
     );
 }
 
-function OwnerRegistration() {
-    // Simplified version of the main Registry form
-    const [formData, setFormData] = useState({
-        name: '',
-        contact: '',
-        plate: '',
-        model: ''
-    });
-    const [status, setStatus] = useState<any>(null);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setStatus({ type: 'loading', text: 'Registering...' });
-
-        try {
-            const fd = new FormData();
-            fd.append('name', formData.name);
-            fd.append('contact_info', formData.contact);
-            fd.append('license_plate', formData.plate);
-            fd.append('make_model', formData.model);
-
-            const res = await fetch(`http://localhost:8000/api/register`, {
-                method: 'POST',
-                body: fd
-            });
-
-            if (res.ok) {
-                setStatus({ type: 'success', text: 'Registration Successful!' });
-                setFormData({ name: '', contact: '', plate: '', model: '' });
-            } else {
-                const err = await res.json();
-                setStatus({ type: 'error', text: err.detail || 'Registration Failed' });
-            }
-        } catch (e) {
-            setStatus({ type: 'error', text: 'Network Error' });
-        }
-    };
-
+function InfoIcon({ size, className = "" }: { size: number; className?: string }) {
     return (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-xl mx-auto mt-8">
-            <div className="text-center space-y-2 mb-8">
-                <h2 className="text-2xl font-light text-white">Register Vehicle</h2>
-                <p className="text-zinc-500">Join the automated toll network.</p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-5 bg-zinc-900/30 p-8 rounded-2xl border border-zinc-800">
-                <div className="space-y-4">
-                    <label className="text-xs uppercase tracking-wider text-zinc-500 font-semibold pl-1">Personal Info</label>
-                    <input
-                        type="text"
-                        placeholder="Full Name"
-                        required
-                        className="w-full bg-black/50 border border-zinc-800 rounded-lg py-3 px-4 text-zinc-200 focus:outline-none focus:border-emerald-500 transition-colors"
-                        value={formData.name}
-                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    />
-                    <input
-                        type="text"
-                        placeholder="Phone / Email"
-                        required
-                        className="w-full bg-black/50 border border-zinc-800 rounded-lg py-3 px-4 text-zinc-200 focus:outline-none focus:border-emerald-500 transition-colors"
-                        value={formData.contact}
-                        onChange={e => setFormData({ ...formData, contact: e.target.value })}
-                    />
-                </div>
-
-                <div className="space-y-4 pt-4">
-                    <label className="text-xs uppercase tracking-wider text-zinc-500 font-semibold pl-1">Vehicle Info</label>
-                    <input
-                        type="text"
-                        placeholder="License Plate (e.g. MH12AB1234)"
-                        required
-                        className="w-full bg-black/50 border border-zinc-800 rounded-lg py-3 px-4 text-zinc-200 focus:outline-none focus:border-emerald-500 transition-colors font-mono"
-                        value={formData.plate}
-                        onChange={e => setFormData({ ...formData, plate: e.target.value.toUpperCase() })}
-                    />
-                    <input
-                        type="text"
-                        placeholder="Make & Model"
-                        required
-                        className="w-full bg-black/50 border border-zinc-800 rounded-lg py-3 px-4 text-zinc-200 focus:outline-none focus:border-emerald-500 transition-colors"
-                        value={formData.model}
-                        onChange={e => setFormData({ ...formData, model: e.target.value })}
-                    />
-                </div>
-
-                {status && (
-                    <div className={`p-3 rounded-lg text-sm flex items-center gap-2 ${status.type === 'success' ? 'bg-emerald-500/10 text-emerald-400' :
-                        status.type === 'error' ? 'bg-red-500/10 text-red-400' : 'text-zinc-400'
-                        }`}>
-                        {status.type === 'success' ? <CheckCircle size={14} /> : status.type === 'error' ? <AlertCircle size={14} /> : null}
-                        {status.text}
-                    </div>
-                )}
-
-                <button
-                    type="submit"
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg transition-colors mt-4"
-                >
-                    Register Vehicle
-                </button>
-            </form>
-        </div>
+        <svg
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={className}
+        >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+        </svg>
     );
 }

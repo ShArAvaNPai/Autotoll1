@@ -20,7 +20,11 @@ export interface AnalysisResult {
     name: string;
     info: string;
     photo: string;
+    balance?: number; // Added balance to owner info
   };
+  balanceStatus?: 'ok' | 'low_balance';
+  allowedToPass?: boolean;
+  location?: string;
 }
 
 export interface TollRecord extends AnalysisResult {

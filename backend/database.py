@@ -19,6 +19,7 @@ class Owner(Base):
     name = Column(String, index=True)
     contact_info = Column(String)
     photo_path = Column(String) # Path to stored image
+    balance = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     vehicles = relationship("Vehicle", back_populates="owner")
@@ -47,9 +48,24 @@ class Detection(Base):
     toll_amount = Column(Integer, default=0)
     status = Column(String, default="verified") # 'verified', 'pending_review'
     image_path = Column(String, nullable=True)
+    location = Column(String, default="UDUPI") # New Column for Location
 
     known_vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=True)
     is_authorized = Column(Integer, default=0) # 0=Unknown, 1=Authorized, -1=Unauthorized
+
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class Transaction(Base):
+    __tablename__ = "transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("owners.id"))
+    amount = Column(Integer) # Positive for credit, negative for debit
+    type = Column(String) # 'TOPUP', 'TOLL', 'ADMIN_ADJUST', 'CASH_PAYMENT'
+    description = Column(String)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+
+    owner = relationship("Owner")
 
 class Correction(Base):
     __tablename__ = "corrections"

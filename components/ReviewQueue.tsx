@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, CheckSquare, Car, Truck, Bus, FileCode, X, Maximize2, Save, Trash2 } from 'lucide-react';
 import { submitCorrection } from '../services/api';
+import { getBackendUrl } from '../services/apiConfig';
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = getBackendUrl();
 
 interface Detection {
     id: number;

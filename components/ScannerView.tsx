@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Upload, Camera, X, Check, Loader2, Maximize2, AlertTriangle, ScanLine, Edit2, Save } from 'lucide-react';
 import { AnalysisResult, VehicleType } from '../types';
 import { submitCorrection } from '../services/api';
+import { getBackendUrl } from '../services/apiConfig';
 
 interface ScannerViewProps {
   onAnalyze: (file: File) => void;
@@ -38,6 +39,33 @@ export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedIma
       setPreview(lastScannedImage);
     }
   }, [lastScannedImage]);
+
+  // TTS Logic
+  const lastSpokenPlateRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (localResult?.licensePlate) {
+      // Only speak if it's a new plate or has changed
+      if (localResult.licensePlate !== lastSpokenPlateRef.current) {
+        // Space out characters for better pronunciation (e.g. "K A 0 1")
+        const plateChars = localResult.licensePlate.split('').join(' ');
+        const text = `Vehicle Detected. Plate Number: ${plateChars}`;
+
+        // Cancel any ongoing speech
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.9; // Slightly slower for clarity
+        window.speechSynthesis.speak(utterance);
+
+        lastSpokenPlateRef.current = localResult.licensePlate;
+      }
+    } else {
+      // Reset if no result (e.g. discarded)
+      lastSpokenPlateRef.current = null;
+      window.speechSynthesis.cancel();
+    }
+  }, [localResult?.licensePlate]);
 
   const handleStartEditing = () => {
     if (localResult) {
@@ -138,7 +166,7 @@ export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedIma
 
     setIsDiscarding(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/detections/${localResult.id}`, {
+      const res = await fetch(`${getBackendUrl()}/api/detections/${localResult.id}`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -238,113 +266,177 @@ export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedIma
 
       {/* Result Card (Minimal) */}
       {localResult && !isAnalyzing && (
-        <div className="bg-zinc-900 rounded-xl p-5 border border-zinc-800 shadow-xl animate-in slide-in-from-bottom-4 duration-500">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <p className="text-xs font-semibold text-blue-400 uppercase tracking-widest">Detection Result</p>
-                {localResult.owner && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                    <Check size={10} />
-                    REGISTERED
-                  </span>
-                )}
+        <>
+          {/* Low Balance Blocking Modal */}
+          {localResult.balanceStatus === 'low_balance' && (
+            <div className="absolute inset-0 z-50 bg-red-900/90 backdrop-blur-md flex flex-col items-center justify-center p-6 animate-in zoom-in-95 duration-300 rounded-2xl text-center">
+              <div className="bg-white p-4 rounded-full mb-6 shadow-2xl animate-bounce">
+                <AlertTriangle size={48} className="text-red-600" />
+              </div>
+              <h2 className="text-4xl font-black text-white mb-2 tracking-tighter uppercase drop-shadow-lg">STOP VEHICLE</h2>
+              <p className="text-red-200 text-lg font-bold mb-8">Insufficient Wallet Balance</p>
+
+              <div className="bg-black/40 p-6 rounded-2xl border border-red-500/30 mb-8 w-full max-w-sm">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-zinc-400 text-sm">Required</span>
+                  <span className="text-white font-bold text-xl">₹{localResult.tollAmount || 50}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-400 text-sm">Available</span>
+                  <span className="text-red-400 font-bold text-xl">₹{localResult.owner?.balance || 0}</span>
+                </div>
               </div>
 
-              {isEditing ? (
-                <div className="flex items-center gap-2 mt-1">
-                  <input
-                    type="text"
-                    value={tempPlate}
-                    onChange={(e) => setTempPlate(e.target.value.toUpperCase())}
-                    className="bg-zinc-950 border border-blue-500 rounded px-3 py-1 text-2xl font-mono font-bold text-white w-full max-w-[200px] outline-none"
-                    autoFocus
-                  />
-                  <button onClick={handleSaveCorrection} className="p-2 bg-blue-600 text-white rounded hover:bg-blue-500">
-                    <Save size={20} />
-                  </button>
-                  <button onClick={() => setIsEditing(false)} className="p-2 bg-zinc-800 text-zinc-400 rounded hover:bg-zinc-700">
-                    <X size={20} />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3 group">
-                  <h2 className="text-2xl font-bold font-mono text-white tracking-tight">{localResult.licensePlate}</h2>
-                  <button onClick={handleStartEditing} className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-500 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-all">
-                    <Edit2 size={16} />
-                  </button>
-                </div>
-              )}
-
-            </div>
-            <div className={`px-3 py-1 rounded-full text-xs font-bold border ${localResult.confidence > 0.85 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-              }`}>
-              {(localResult.confidence * 100).toFixed(0)}% CONFIDENCE
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-3 bg-zinc-950/50 rounded-lg border border-zinc-800">
-              <p className="text-xs text-zinc-500 mb-1">Vehicle Type</p>
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-zinc-200 capitalize">{localResult.vehicleType}</span>
-              </div>
-            </div>
-            <div className="p-3 bg-zinc-950/50 rounded-lg border border-zinc-800">
-              <p className="text-xs text-zinc-500 mb-1">Make/Model</p>
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-zinc-200 truncate">{localResult.makeModel}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Owner Information Section */}
-          {localResult.owner && (
-            <div className="mt-4 p-4 bg-gradient-to-br from-emerald-500/5 to-emerald-600/5 rounded-lg border border-emerald-500/20">
-              <p className="text-xs font-semibold text-emerald-400 uppercase tracking-widest mb-3">Registered Owner</p>
-              <div className="flex items-center gap-4">
-                {localResult.owner.photo && (
-                  <div className="w-16 h-16 rounded-full overflow-hidden bg-zinc-800 border-2 border-emerald-500/30 flex-shrink-0">
-                    <img
-                      src={localResult.owner.photo}
-                      alt={localResult.owner.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        // Fallback if image fails to load
-                        e.currentTarget.style.display = 'none';
-                      }}
-                    />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-base font-bold text-white mb-1">{localResult.owner.name}</p>
-                  <p className="text-sm text-zinc-400 truncate">{localResult.owner.info}</p>
-                </div>
+              <div className="grid grid-cols-1 w-full max-w-sm gap-4">
+                <button
+                  onClick={async () => {
+                    try {
+                      const formData = new FormData();
+                      formData.append('detection_id', localResult.id?.toString() || "");
+                      formData.append('action', 'pay_cash');
+                      await fetch(`${getBackendUrl()}/api/owner/resolve_low_balance`, { method: 'POST', body: formData });
+                      setLocalResult({ ...localResult, balanceStatus: 'ok', status: 'processed' }); // Update local state to hide modal
+                    } catch (e) {
+                      alert("Error processing");
+                    }
+                  }}
+                  className="w-full py-5 bg-green-500 hover:bg-green-400 text-white font-bold rounded-xl shadow-xl shadow-green-900/40 text-lg transition-all active:scale-95"
+                >
+                  COLLECT CASH & APPROVE
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const formData = new FormData();
+                      formData.append('detection_id', localResult.id?.toString() || "");
+                      formData.append('action', 'warning');
+                      await fetch(`${getBackendUrl()}/api/owner/resolve_low_balance`, { method: 'POST', body: formData });
+                      setLocalResult({ ...localResult, balanceStatus: 'ok', status: 'processed' });
+                      alert("Warning sent to user.");
+                    } catch (e) {
+                      alert("Error processing");
+                    }
+                  }}
+                  className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold rounded-xl border border-white/5 transition-all"
+                >
+                  Allow with Warning
+                </button>
               </div>
             </div>
           )}
 
-          <div className="mt-6 flex gap-3">
-            <button
-              onClick={handleDiscard}
-              disabled={isDiscarding}
-              className="flex-1 py-2.5 bg-zinc-950 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 rounded-lg border border-zinc-800 hover:border-red-500/20 transition-all flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50"
-            >
-              <X size={14} />
-              Discard
-            </button>
-            <button
-              onClick={() => {
-                setPreview(null);
-                onClear?.();
-              }}
-              className="flex-[2] py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium"
-            >
-              <Check size={14} />
-              Scan Next
-            </button>
+          <div className="bg-zinc-900 rounded-xl p-5 border border-zinc-800 shadow-xl animate-in slide-in-from-bottom-4 duration-500 relative overflow-hidden">
+
+            {/* If blocked, blur the bg card */}
+            {localResult.balanceStatus === 'low_balance' && <div className="absolute inset-0 bg-black/50 backdrop-blur-sm z-10" />}
+
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="text-xs font-semibold text-blue-400 uppercase tracking-widest">Detection Result</p>
+                  {localResult.owner && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                      <Check size={10} />
+                      REGISTERED
+                    </span>
+                  )}
+                </div>
+
+                {isEditing ? (
+                  <div className="flex items-center gap-2 mt-1">
+                    <input
+                      type="text"
+                      value={tempPlate}
+                      onChange={(e) => setTempPlate(e.target.value.toUpperCase())}
+                      className="bg-zinc-950 border border-blue-500 rounded px-3 py-1 text-2xl font-mono font-bold text-white w-full max-w-[200px] outline-none"
+                      autoFocus
+                    />
+                    <button onClick={handleSaveCorrection} className="p-2 bg-blue-600 text-white rounded hover:bg-blue-500">
+                      <Save size={20} />
+                    </button>
+                    <button onClick={() => setIsEditing(false)} className="p-2 bg-zinc-800 text-zinc-400 rounded hover:bg-zinc-700">
+                      <X size={20} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 group">
+                    <h2 className="text-2xl font-bold font-mono text-white tracking-tight">{localResult.licensePlate}</h2>
+                    <button onClick={handleStartEditing} className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-500 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-all">
+                      <Edit2 size={16} />
+                    </button>
+                  </div>
+                )}
+
+              </div>
+              <div className={`px-3 py-1 rounded-full text-xs font-bold border ${localResult.confidence > 0.85 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                }`}>
+                {(localResult.confidence * 100).toFixed(0)}% CONFIDENCE
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-3 bg-zinc-950/50 rounded-lg border border-zinc-800">
+                <p className="text-xs text-zinc-500 mb-1">Vehicle Type</p>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-zinc-200 capitalize">{localResult.vehicleType}</span>
+                </div>
+              </div>
+              <div className="p-3 bg-zinc-950/50 rounded-lg border border-zinc-800">
+                <p className="text-xs text-zinc-500 mb-1">Make/Model</p>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-zinc-200 truncate">{localResult.makeModel}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Owner Information Section */}
+            {localResult.owner && (
+              <div className="mt-4 p-4 bg-gradient-to-br from-emerald-500/5 to-emerald-600/5 rounded-lg border border-emerald-500/20">
+                <p className="text-xs font-semibold text-emerald-400 uppercase tracking-widest mb-3">Registered Owner</p>
+                <div className="flex items-center gap-4">
+                  {localResult.owner.photo && (
+                    <div className="w-16 h-16 rounded-full overflow-hidden bg-zinc-800 border-2 border-emerald-500/30 flex-shrink-0">
+                      <img
+                        src={localResult.owner.photo}
+                        alt={localResult.owner.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // Fallback if image fails to load
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-base font-bold text-white mb-1">{localResult.owner.name}</p>
+                    <p className="text-sm text-zinc-400 truncate">{localResult.owner.info}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={handleDiscard}
+                disabled={isDiscarding}
+                className="flex-1 py-2.5 bg-zinc-950 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 rounded-lg border border-zinc-800 hover:border-red-500/20 transition-all flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50"
+              >
+                <X size={14} />
+                Discard
+              </button>
+              <button
+                onClick={() => {
+                  setPreview(null);
+                  onClear?.();
+                }}
+                className="flex-[2] py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+              >
+                <Check size={14} />
+                Scan Next
+              </button>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

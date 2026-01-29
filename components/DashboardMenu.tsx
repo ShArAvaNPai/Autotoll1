@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Activity, User, Clock, Settings, FileCheck, ScanLine, Car, ChevronRight, Menu } from 'lucide-react';
+import { Activity, User, Clock, Settings, FileCheck, ScanLine, Car, ChevronRight, Menu, Wallet, TrendingUp } from 'lucide-react';
 
 interface DashboardMenuProps {
     onNavigate: (view: any) => void;
@@ -16,6 +16,8 @@ export const DashboardMenu: React.FC<DashboardMenuProps> = ({ onNavigate, stats 
         { id: 'monitor', title: 'Live Monitor', icon: ScanLine, color: 'text-blue-600', bg: 'bg-blue-50' },
         { id: 'analytics', title: 'Analytics', icon: Activity, color: 'text-purple-600', bg: 'bg-purple-50' },
         { id: 'registry', title: 'Registry', icon: User, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+        { id: 'funds', title: 'Funds', icon: Wallet, color: 'text-green-600', bg: 'bg-green-50' },
+        { id: 'reports', title: 'Reports', icon: TrendingUp, color: 'text-pink-600', bg: 'bg-pink-50' },
         { id: 'history', title: 'History', icon: Clock, color: 'text-indigo-600', bg: 'bg-indigo-50' },
         { id: 'review', title: 'Review', icon: FileCheck, color: 'text-amber-600', bg: 'bg-amber-50' },
         { id: 'realtime', title: 'Realtime', icon: Car, color: 'text-cyan-600', bg: 'bg-cyan-50' },

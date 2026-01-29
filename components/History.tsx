@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, Car, AlertTriangle, User, RefreshCw, Trash2 } from 'lucide-react';
+import { getBackendUrl } from '../services/apiConfig';
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = getBackendUrl();
 
 interface Detection {
     id: number;
@@ -80,6 +81,7 @@ export function History({ onRegister }: HistoryProps) {
                     <thead>
                         <tr className="bg-zinc-900 text-zinc-500 text-sm border-b border-zinc-800">
                             <th className="p-4 font-medium">Time</th>
+                            <th className="p-4 font-medium">Location</th>
                             <th className="p-4 font-medium">Vehicle</th>
                             <th className="p-4 font-medium">License Plate</th>
                             <th className="p-4 font-medium">Status</th>
@@ -102,6 +104,11 @@ export function History({ onRegister }: HistoryProps) {
                                         <td className="p-4 text-zinc-400 flex items-center gap-2">
                                             <Clock size={14} />
                                             {formatDate(log.timestamp)}
+                                        </td>
+                                        <td className="p-4 text-zinc-300 font-medium">
+                                            <span className="px-2 py-1 rounded bg-zinc-800 border border-zinc-700 text-xs">
+                                                {log.location || 'UDUPI'}
+                                            </span>
                                         </td>
                                         <td className="p-4 text-zinc-200 capitalize">
                                             {log.vehicle_type}

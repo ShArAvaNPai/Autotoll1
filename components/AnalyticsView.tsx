@@ -4,8 +4,9 @@ import {
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import { Activity, IndianRupee, Car, Clock, TrendingUp, Filter, RefreshCw } from 'lucide-react';
+import { getBackendUrl } from '../services/apiConfig';
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = getBackendUrl();
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#71717a'];
 

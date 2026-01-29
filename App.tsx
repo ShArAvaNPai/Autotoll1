@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { AnalyticsView } from './components/AnalyticsView';
 import { SettingsView } from './components/SettingsView';
 import { RealtimeDetectionView } from './components/RealtimeDetectionView';
-import { LayoutDashboard, Car, IndianRupee, Activity, Settings, Bell, User, Clock, FileCheck, ScanLine, LogOut, Home } from 'lucide-react';
+import { ReportsView } from './components/ReportsView';
+import { FundsView } from './components/FundsView';
+import { LayoutDashboard, Car, IndianRupee, Activity, Settings, Bell, User, Clock, FileCheck, ScanLine, LogOut, Home, MapPin } from 'lucide-react';
 import { StatsCard } from './components/StatsCard'; // Still needed for some imports if used elsewhere or removing unused
 import { LoginView } from './components/LoginView';
 import { VehicleOwnerView } from './components/VehicleOwnerView';
@@ -14,6 +16,8 @@ import { AnalysisResult, TollRecord, VehicleType, TollRate } from './types';
 import { TOLL_RATES as DEFAULT_RATES } from './constants';
 import { DashboardMenu } from './components/DashboardMenu';
 import { LiveMonitor } from './components/LiveMonitor';
+import { getBackendUrl } from './services/apiConfig';
+import { AdminTopUpModal } from './components/AdminTopUpModal';
 
 export default function App() {
   const [history, setHistory] = useState<TollRecord[]>([]);
@@ -21,10 +25,12 @@ export default function App() {
   const [currentResult, setCurrentResult] = useState<AnalysisResult | null>(null);
   const [currentScanImage, setCurrentScanImage] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'admin' | 'owner' | null>(null);
+  const [showAdminTopUp, setShowAdminTopUp] = useState(false);
   // Default view is now 'monitor' since dashboard menu is an overlay
-  const [currentView, setCurrentView] = useState<'monitor' | 'analytics' | 'settings' | 'registry' | 'history' | 'review' | 'realtime'>('monitor');
+  const [currentView, setCurrentView] = useState<'monitor' | 'analytics' | 'settings' | 'registry' | 'history' | 'review' | 'realtime' | 'reports' | 'funds'>('monitor');
   const [tollRates, setTollRates] = useState<TollRate>(DEFAULT_RATES);
   const [registryInitialPlate, setRegistryInitialPlate] = useState<string>('');
+  const [selectedLocation, setSelectedLocation] = useState<'UDUPI' | 'MANIPAL'>('UDUPI');
   const [summary, setSummary] = useState({
     total_vehicles: 0,
     total_revenue: 0,
@@ -32,9 +38,10 @@ export default function App() {
     pending_review: 0
   });
 
+
   const fetchSummary = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/summary');
+      const res = await fetch(`${getBackendUrl()}/api/summary`);
       if (res.ok) {
         setSummary(await res.json());
       }
@@ -45,7 +52,7 @@ export default function App() {
 
   const fetchHistory = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/history');
+      const res = await fetch(`${getBackendUrl()}/api/history`);
       if (res.ok) {
         const data = await res.json();
         const mappedRecords: TollRecord[] = data.map((d: any) => {
@@ -68,7 +75,7 @@ export default function App() {
             licensePlate: d.license_plate || 'UNKNOWN',
             confidence: parseFloat(d.confidence) || 0,
             tollAmount: d.toll_amount || 0,
-            imageUrl: d.image_path ? `http://localhost:8000${d.image_path}` : '',
+            imageUrl: d.image_path ? `${getBackendUrl()}${d.image_path}` : '',
             status: d.status === 'verified' ? 'processed' : 'manual_review',
             color: 'Detected',
             makeModel: d.make_model || `Detected ${d.vehicle_type || 'Vehicle'}`,
@@ -156,12 +163,20 @@ export default function App() {
 
       {/* Persistent Navigation Overlay */}
       <DashboardMenu
-        onNavigate={(view) => setCurrentView(view)}
+        onNavigate={(view) => {
+          if (view === 'add_balance') {
+            setShowAdminTopUp(true);
+          } else {
+            setCurrentView(view);
+          }
+        }}
         stats={{
           totalVehicles: summary.total_vehicles,
           pendingReview: summary.pending_review
         }}
       />
+
+      <AdminTopUpModal isOpen={showAdminTopUp} onClose={() => setShowAdminTopUp(false)} />
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden relative">
@@ -172,17 +187,32 @@ export default function App() {
               <Car className="text-white" size={20} />
             </div>
             <div>
-              <span className="font-bold text-lg text-slate-900 tracking-tight block">AutoToll AI</span>
-              <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold block -mt-1">Admin Console</span>
+              <span className="font-bold text-lg text-white tracking-tight block leading-none">AutoToll AI</span>
+              <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block mt-1">Admin Console</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-4 text-sm">
-            <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 font-medium flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              Lane #1: Active
-            </span>
-            <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full border border-blue-100 font-medium">Camera: Online</span>
+          <div className="flex items-center gap-4">
+            {/* Location Selector */}
+            <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl">
+              <MapPin size={16} className="text-blue-500" />
+              <select
+                value={selectedLocation}
+                onChange={(e) => setSelectedLocation(e.target.value as any)}
+                className="bg-transparent text-sm font-bold text-zinc-300 focus:outline-none cursor-pointer"
+              >
+                <option value="UDUPI" className="bg-zinc-900">UDUPI</option>
+                <option value="MANIPAL" className="bg-zinc-900">MANIPAL</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-4 text-sm">
+              <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20 font-medium flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                Lane #1: Active
+              </span>
+              <span className="px-3 py-1 bg-blue-500/10 text-blue-400 rounded-full border border-blue-500/20 font-medium">Camera: Online</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -195,11 +225,11 @@ export default function App() {
 
             <div className="flex items-center gap-3">
               <div className="text-right hidden md:block">
-                <div className="text-sm font-bold text-slate-900">Administrator</div>
-                <div className="text-xs text-slate-500">Super User</div>
+                <div className="text-sm font-bold text-white">Administrator</div>
+                <div className="text-xs text-zinc-500 font-medium">Super User</div>
               </div>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 border border-white shadow-sm flex items-center justify-center">
-                <User size={20} className="text-blue-600" />
+              <div className="w-10 h-10 rounded-full bg-zinc-800 border border-white/10 shadow-sm flex items-center justify-center">
+                <User size={20} className="text-blue-400" />
               </div>
             </div>
 
@@ -217,6 +247,7 @@ export default function App() {
         <div className="flex-1 overflow-auto p-6 transition-all duration-300">
           {currentView === 'monitor' ? (
             <LiveMonitor
+              selectedLocation={selectedLocation}
               totalVehicles={totalVehicles}
               totalRevenue={totalRevenue}
               avgConfidence={avgConfidence}
@@ -234,6 +265,10 @@ export default function App() {
             <Registry initialPlate={registryInitialPlate} />
           ) : currentView === 'history' ? (
             <History onRegister={handleRegisterFromHistory} />
+          ) : currentView === 'reports' ? (
+            <ReportsView />
+          ) : currentView === 'funds' ? (
+            <FundsView />
           ) : currentView === 'realtime' ? (
             <RealtimeDetectionView />
           ) : currentView === 'review' ? (
