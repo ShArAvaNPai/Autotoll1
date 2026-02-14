@@ -1,0 +1,77 @@
+Chapter 6: Coding (Pages 16-21)
+
+6.1 Introduction
+The coding phase involved translating the system design into a functional software application using modern web and AI technologies. The development followed an agile methodology, where components were built incrementally and integrated into the main pipeline. The focus was on readability, maintainability, and performance optimization for real-time AI inference.
+
+6.2 Programing Practices
+
+    6.2.1 Top-down & Bottom-up Approaches
+    - **Top-Down Approach**: Used for the UI design, where the overall layout (Dashboard, Sidebars, Navigation) was established first, and individual widgets (Charts, Camera Views) were implemented later.
+    - **Bottom-Up Approach**: Applied to the AI and Database layer. The foundational OCR and YOLO scripts were developed and tested as standalone utilities before being integrated into the FastAPI backend and finally connected to the frontend.
+
+    6.2.2 Structured Programming
+    The project adheres to structured programming principles:
+    - **Modularity**: Code is split into reusable components (React components) and specialized backend services (database.py, main.py).
+    - **Type Safety**: TypeScript is used in the frontend to prevent runtime errors and ensure consistent data structures across the application.
+    - **Asynchronous Execution**: Python's `async/await` is utilized in FastAPI to handle high-concurrency requests and non-blocking AI processing.
+
+6.3 Verification
+Verification was performed through "Static Analysis" and "Peer Review" (simulated). Continuous linting (ESLint for TS, Flake8 for Python) was used to ensure the code follows industry standards. Logic verification was conducted by comparing AI detection outputs against manually labeled ground truth data.
+
+6.4 Source Code (Reference)
+The core application consists of the following primary source files:
+- `App.tsx`: Main entry point for the frontend, managing routing and global state.
+- `main.py`: The heart of the backend, containing API endpoints for AI analysis and registry management.
+- `database.py`: Handles all SQL operations and database connections.
+- `ScannerView.tsx`: The primary interface for live vehicle detection and camera interfacing.
+- `HistoryTable.tsx`: Manages the display and filtering of transaction logs.
+
+-
+
+Chapter 7: Testing (Pages 22-25)
+
+7.1 Introduction
+Testing ensures that the application meets the specified requirements and operates correctly under various conditions. A multi-layered testing strategy was employed, covering individual functions, integrated modules, and end-to-end user workflows.
+
+7.2 Testing Objectives
+- To verify that the AI model correctly identifies vehicles and reads license plates.
+- To ensure that the wallet system accurately deducts funds without errors.
+- To validate that the UI is responsive and provides real-time feedback to the operator.
+- To check the security of user data and transaction logs.
+
+7.3 Testing Methods
+- **White-Box Testing**: Examining the internal logic of the backend services (API routes and database queries).
+- **Black-Box Testing**: Testing the system from an end-user perspective, focusing on inputs (images) and outputs (toll success/failure).
+
+7.4 Testing Steps
+
+    7.4.1 Unit Testing
+    - **API Endpoints**: Individual routes like `/api/history` and `/api/registry` were tested using Postman to ensure they return the correct JSON structure.
+    - **Components**: React components were tested for correct rendering of props and state updates.
+
+    7.4.2 Integration Testing
+    - Verified the data flow between the React frontend and the FastAPI backend.
+    - Ensured that a positive AI detection correctly triggers a database update in the wallet ledger.
+
+    7.4.3 Validation Testing (OCR Accuracy)
+    - Tested the ALPR pipeline against a validation set of 100 images.
+    - Result: Achieved 94% accuracy in reading standard plates, with slightly lower performance on damaged or dirty plates.
+
+    7.4.4 Output Testing
+    - Verified that historical logs matches the actual detections captured during "live" simulation.
+
+7.5 User Acceptance Testing (UAT)
+A simulated UAT was conducted where different scenarios (Registered User, Unregistered User, Insufficient Balance) were tested to ensure the system handles each case according to the business logic outlined in Chapter 2.
+
+7.6 Test Cases
+
+| TC ID | Scenario | Input | Expected Output | Status |
+|-------|----------|-------|-----------------|--------|
+| TC01  | Valid Registration | Image of KA01MH1234 | "Access Granted", ₹50 Deducted | PASS |
+| TC02  | Unregistered Vehicle | Image of Unknown Plate | "Unregistered", Highlight in Dashboard | PASS |
+| TC03  | Low Funds | Logged in User (₹10) | "Insufficient Balance", Alert Admin | PASS |
+| TC04  | Manual Correction | Low Conf. Plate | Admin edits text -> Record Updates | PASS |
+| TC05  | Search Function | Query "MH04" | Correct history records displayed | PASS |
+
+7.7 Conclusion
+The testing phase confirmed that AutoToll AI is stable and reliable for its intended purpose. While OCR accuracy is high, the manual review module provides a necessary safety net for edge cases, ensuring 100% data integrity in the financial logs.

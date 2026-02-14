@@ -1,6 +1,6 @@
 import React from 'react';
 import { TollRecord, VehicleType } from '../types';
-import { Car, Truck, Bike, Bus, AlertCircle } from 'lucide-react';
+import { Car, Truck, Bike, Bus, AlertCircle, Download } from 'lucide-react';
 
 interface HistoryTableProps {
   records: TollRecord[];
@@ -17,10 +17,38 @@ const VehicleIcon = ({ type }: { type: VehicleType }) => {
 };
 
 export const HistoryTable: React.FC<HistoryTableProps> = ({ records }) => {
+  const downloadCSV = () => {
+    const headers = ['Time', 'Vehicle Type', 'Make/Model', 'License Plate', 'Toll Amount', 'Status'];
+    const rows = records.map(r => [
+      new Date(r.timestamp).toLocaleString(),
+      r.vehicleType,
+      r.makeModel,
+      r.licensePlate,
+      r.tollAmount,
+      r.status
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8,"
+      + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "toll_history.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl overflow-hidden flex flex-col h-full">
-      <div className="p-4 border-b border-zinc-800/50 bg-zinc-900">
+      <div className="p-4 border-b border-zinc-800/50 bg-zinc-900 flex justify-between items-center">
         <h3 className="font-semibold text-zinc-200">Recent Transactions</h3>
+        <button
+          onClick={downloadCSV}
+          className="p-2 bg-zinc-800 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-700 transition-colors"
+          title="Export CSV"
+        >
+          <Download size={16} />
+        </button>
       </div>
       <div className="overflow-auto flex-1">
         <table className="w-full text-left text-sm text-zinc-400">

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 from ultralytics import YOLO
-import easyocr
+from fast_alpr import ALPR
 import cv2
 import numpy as np
 from PIL import Image
@@ -16,6 +16,7 @@ import datetime
 from sqlalchemy import func, Float
 import sqlalchemy
 import pandas as pd
+import re
 
 import hashlib
 from dotenv import load_dotenv
@@ -74,7 +75,12 @@ def get_db():
 # Load Models
 # YOLOv8n (nano) is small and fast. It will download on first run.
 model = YOLO('yolov8n.pt') 
-reader = easyocr.Reader(['en'])
+# fast-alpr will handle detection and OCR using efficient ONNX models
+# Using YOLOv9-tiny 640px for good speed/accuracy balance
+alpr = ALPR(
+    detector_model="yolo-v9-t-640-license-plate-end2end", 
+    ocr_model="global-plates-mobile-vit-v2-model" # Verified common model for fast-plate-ocr
+)
 
 # Load Specialized Plate Model (if available)
 plate_model = None
@@ -189,6 +195,7 @@ async def update_vehicle(
     contact_info: str = Form(None),
     license_plate: str = Form(None),
     make_model: str = Form(None),
+    vehicle_type: str = Form(None),
     db: Session = Depends(get_db)
 ):
     vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
@@ -209,6 +216,8 @@ async def update_vehicle(
         vehicle.license_plate = license_plate.upper()
     if make_model is not None:
         vehicle.make_model = make_model
+    if vehicle_type is not None:
+        vehicle.vehicle_type = vehicle_type
         
     db.commit()
     db.refresh(vehicle)
@@ -263,6 +272,7 @@ async def register_full(
     contact_info: str = Form(...),
     license_plate: str = Form(...),
     make_model: str = Form(...),
+    vehicle_type: str = Form("Car"),
     photo: UploadFile = File(None),
     db: Session = Depends(get_db)
 ):
@@ -291,7 +301,8 @@ async def register_full(
 
         new_vehicle = Vehicle(
             license_plate=license_plate.upper(), 
-            make_model=make_model, 
+            make_model=make_model,
+            vehicle_type=vehicle_type,
             owner_id=new_owner.id
         )
         db.add(new_vehicle)
@@ -765,10 +776,6 @@ async def analyze_image(
                     if conf > confidence:
                         confidence = conf
                         vehicle_type = coco_map[cls_id]
-
-                    if conf > confidence:
-                        confidence = conf
-                        vehicle_type = coco_map[cls_id]
                         # Capture the specific box for color detection
                         x1, y1, x2, y2 = map(int, b.xyxy[0].cpu().numpy())
                         color_crop = img_cv[y1:y2, x1:x2]
@@ -810,209 +817,129 @@ async def analyze_image(
         if 'color_crop' in locals() and color_crop.size > 0:
              vehicle_color = get_dominant_color(color_crop)
 
-        # --- Hybrid OCR Pipeline ---
-        
-        import re
-
-        def preprocess_image(img):
-            """Applies advanced preprocessing for OCR"""
-            # Resize if too small (always helpful for OCR)
-            h, w = img.shape[:2]
-            if h < 300:
-                scale = 300 / h
-                img = cv2.resize(img, (int(w*scale), int(h*scale)), interpolation=cv2.INTER_CUBIC)
-            
-            # Convert to Gray
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            
-            # Morphological Transformation to Remove Noise
-            # Kernel size depends on image resolution, 3x3 is a safe general bet
-            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
-            
-            # TopHat (extracts bright objects from dark background) + BlackHat (vice versa)
-            # This helps standardizes lighting locally
-            topHat = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, kernel)
-            blackHat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, kernel)
-            
-            # Add and subtract to enhance contrast
-            add = cv2.add(gray, topHat)
-            subtract = cv2.subtract(add, blackHat)
-            
-            # Blur to remove high freq noise
-            blur = cv2.GaussianBlur(subtract, (5, 5), 0)
-            
-            # Adaptive Thresholding (Better than partial Otsu for uneven lighting)
-            thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                          cv2.THRESH_BINARY, 19, 9)
-                                          
-            # Final Dilation to join broken characters
-            return cv2.dilate(thresh, kernel, iterations=1)
-
         def score_plate(text):
-            """Scores a string based on likelihood of being a license plate"""
+            """Enhanced scoring system for license plate validation"""
             text = text.upper().replace(' ', '')
-            if len(text) < 4 or len(text) > 12: return -10
             
-            # Generic Indian Plate Regex: AA 00 AA 0000
-            # Allow for some missing chars or merged chars
-            # Patterns:
-            # 1. Start with 2 chars (State)
-            # 2. 1-2 digits (District)
-            # 3. 1-3 chars (Series - optional)
-            # 4. 4 digits (Number)
+            if len(text) < 5 or len(text) > 12: return -20  
             
             score = 0
             
-            # Ideal Pattern Check
-            if re.match(r'^[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{3,4}$', text):
+            # Patterns allowing common substitutions
+            # Ideal Pattern (Standard)
+            if re.match(r'^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{3,4}$', text):
+                score += 150
+            # Flexible Pattern (Substitutions)
+            elif re.match(r'^[A-Z0]{2}[0-9O]{1,2}[A-Z0-9]{1,3}[0-9O]{3,4}$', text):
                 score += 100
-            elif re.match(r'^[A-Z]{2}[0-9]{1,2}', text):
-                 score += 20 # Good start
+            elif re.match(r'^[A-Z0]{2}[0-9O]{2,4}$', text):
+                score += 80
+            elif re.match(r'^[A-Z0]{2}[0-9O]{1,2}', text):
+                 score += 30
             
             # Character Mix
             has_alpha = any(c.isalpha() for c in text)
             has_digit = any(c.isdigit() for c in text)
-            if has_alpha and has_digit: score += 10
-            elif has_alpha and not has_digit: score -= 20 # Pure text (billboard?)
+            if has_alpha and has_digit: 
+                score += 20
             
-            # Ban list
-            bad_words = ["TOYOTA", "HONDA", "SUZUKI", "MARUTI", "TATA", "MAHINDRA", "HYUNDAI", "FORD", "NISSAN", "RENAULT", "SKODA", "VOLKSWAGEN", "AUDI", "BMW", "MERCEDES", "VOLVO", "CHEVROLET", "JEEP", "KIA", "MG", "HECTO", "POLICE", "ARMY", "GOVT"]
+            # Brand/Noise Ban list
+            bad_words = [
+                "TOYOTA", "HONDA", "SUZUKI", "MARUTI", "TATA", "MAHINDRA", "HYUNDAI", 
+                "FORD", "NISSAN", "RENAULT", "SKODA", "VOLKSWAGEN", "AUDI", "BMW", 
+                "MERCEDES", "VOLVO", "CHEVROLET", "JEEP", "KIA", "MG", "HECTOR",
+                "POLICE", "ARMY", "GOVT", "STOP", "SLOW", "EXIT", "ENTRY", "PARKING",
+                "DISCOVERY", "SPORT", "LANDROVER", "RANGE", "ROVER"
+            ]
             if any(bw in text for bw in bad_words):
-                 score -= 50
+                 score -= 150 # Heavy penalty
+            
+            if 6 <= len(text) <= 10:
+                score += 10
                  
             return score
 
-        candidates = []
-
-        # Strategy 1: OCR on YOLO Crops & Specialized Plate Detection
-        for r in results:
-            for b in r.boxes:
-                cls_id = int(b.cls[0])
-                if cls_id in vehicle_classes:
-                     x1, y1, x2, y2 = map(int, b.xyxy[0].cpu().numpy())
-                     
-                     # 1A. Specialized Plate Detection (if authorized model exists)
-                     if plate_model:
-                         # Crop the car first
-                         h_img, w_img = img_cv.shape[:2]
-                         # Slight padding to ensure full car is captured if bounding box is tight
-                         pad_x = int((x2-x1)*0.05)
-                         pad_y = int((y2-y1)*0.05)
-                         cx1 = max(0, x1 - pad_x)
-                         cy1 = max(0, y1 - pad_y)
-                         cx2 = min(w_img, x2 + pad_x)
-                         cy2 = min(h_img, y2 + pad_y)
-                         
-                         car_crop = img_cv[cy1:cy2, cx1:cx2]
-                         
-                         # Run plate detection on the car crop
-                         # verbose=False to reduce log spam
-                         plate_results = plate_model(car_crop, verbose=False)
-                         
-                         for p in plate_results:
-                             for box in p.boxes:
-                                 px1, py1, px2, py2 = map(int, box.xyxy[0].cpu().numpy())
-                                 
-                                 # Ensure within bounds of car_crop
-                                 h_car, w_car = car_crop.shape[:2]
-                                 px1, py1 = max(0, px1), max(0, py1)
-                                 px2, py2 = min(w_car, px2), min(h_car, py2)
-                                 
-                                 if px2 > px1 and py2 > py1:
-                                     plate_img = car_crop[py1:py2, px1:px2]
-                                     
-                                     # Pre-process for OCR (Gray + Otsu Thresholding) as requested
-                                     gray_plate = cv2.cvtColor(plate_img, cv2.COLOR_BGR2GRAY)
-                                     thresh_plate = cv2.threshold(gray_plate, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-                                     
-                                     # Resize if too small for OCR (often helps with small crops)
-                                     ph, pw = thresh_plate.shape[:2]
-                                     if ph < 32:
-                                         scale = 32 / ph
-                                         thresh_plate = cv2.resize(thresh_plate, (int(pw*scale), int(ph*scale)), interpolation=cv2.INTER_CUBIC)
-                                     
-                                     # Run OCR with strict settings
-                                     # allowlist: Only these chars
-                                     # mag_ratio: Upscale input for better small char detection (2.0 is usually sweet spot)
-                                     # text_threshold: Lower confidence acceptance (default 0.7, lowering for bad inputs)
-                                     plate_ocr = reader.readtext(thresh_plate, detail=1, 
-                                                                 allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-                                                                 mag_ratio=1.5,
-                                                                 text_threshold=0.6)
-                                     
-                                     for (bbox, text, prob) in plate_ocr:
-                                         cleaned = ''.join(e for e in text if e.isalnum()).upper()
-                                         # Boost score for specialized detection
-                                         s_score = score_plate(cleaned) + 50 
-                                         candidates.append({'text': cleaned, 'source': 'specialized_plate', 'prob': prob, 'score': s_score})
-
-                     # 1B. Fallback / Augmentation: Full Car Crop OCR 
-                     # (Useful if specialized model misses or if no model loaded)
-                     h_img, w_img = img_cv.shape[:2]
-                     pad_x = int((x2-x1)*0.1)
-                     pad_y = int((y2-y1)*0.1)
-                     x1 = max(0, x1 - pad_x)
-                     y1 = max(0, y1 - pad_y)
-                     x2 = min(w_img, x2 + pad_x)
-                     y2 = min(h_img, y2 + pad_y)
-                     
-                     crop = img_cv[y1:y2, x1:x2]
-                     processed_crop = preprocess_image(crop)
-                     
-                     crop = img_cv[y1:y2, x1:x2]
-                     processed_crop = preprocess_image(crop)
-                     
-                     crop_result = reader.readtext(processed_crop, detail=1, 
-                                                   allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-                                                   mag_ratio=1.5)
-                     for (bbox, text, prob) in crop_result:
-                          cleaned = ''.join(e for e in text if e.isalnum()).upper()
-                          candidates.append({'text': cleaned, 'source': 'car_crop', 'prob': prob, 'score': score_plate(cleaned)})
-
-        # Strategy 2: Full Image Scan (Fallback if YOLO missed or crop was bad)
-        # Only run if we don't have a high scoring candidate yet? 
-        # For now, let's always run or run if max score < 50
-        
-        if candidates:
-            curr_max_score = max(c['score'] for c in candidates)
+        def refine_plate(text):
+            """Refine plate text based on common confusion and format"""
+            if len(text) < 6: return text
             
-        # Only fallback if we don't have a good candidate
-        if curr_max_score < 60:
-             print("DEBUG: Weak detection in crops, trying full image scan...")
-             # Resize full image for speed - 720p is usually enough
-             target_h = 720
-             scale = 1.0
-             if img_cv.shape[0] > target_h:
-                  scale = target_h / img_cv.shape[0]
-                  display_h = int(img_cv.shape[0] * scale)
-                  display_w = int(img_cv.shape[1] * scale)
-                  scan_img = cv2.resize(img_cv, (display_w, display_h))
-             else:
-                  scan_img = img_cv
-             
-             processed_full = preprocess_image(scan_img)
-             full_result = reader.readtext(processed_full, detail=1,
-                                           allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-                                           mag_ratio=1.0)
-             
-             for (bbox, text, prob) in full_result:
-                  cleaned = ''.join(e for e in text if e.isalnum()).upper()
-                  candidates.append({'text': cleaned, 'source': 'full', 'prob': prob, 'score': score_plate(cleaned)})
+            chars = list(text)
+            n = len(chars)
+
+            # Heuristic: First 2 are Alpha (State)
+            for i in range(min(2, n)):
+                if chars[i] == '6': chars[i] = 'S' # Fix 6 -> S in State
+                elif chars[i] == '5': chars[i] = 'S' # Fix 5 -> S (Common)
+            
+            # Heuristic: Last 4 are Numeric (Number)
+            # Find the start of the last numeric block
+            if n > 4:
+                for i in range(n-4, n):
+                    if chars[i] == 'S': chars[i] = '6'  # Fix S -> 6 in Number (User Request)
+                    elif chars[i] == 'G': chars[i] = '6' # Fix G -> 6 (Common)
+                    elif chars[i] == 'O': chars[i] = '0' # Fix O -> 0
+            
+            # Heuristic: District (Chars 2 and 3) -> Numeric
+            if n >= 4:
+                for i in range(2, 4):
+                     if chars[i] == 'S': chars[i] = '6' # Fix S -> 6 in District
+                     elif chars[i] == 'O': chars[i] = '0'
+
+            return "".join(chars)
+
+
+        # --- Fast-ALPR Detection Pipeline ---
+        # fast-alpr predict returns a list of AlprPrediction objects
+        alpr_results = alpr.predict(img_cv)
+        
+        candidates = []
+        for res in alpr_results:
+            # res.detection is DetectionResult
+            # res.ocr is OcrResult object with .text and .confidence
+            if res.ocr and res.ocr.text:
+                cleaned = ''.join(e for e in res.ocr.text if e.isalnum()).upper()
+                
+                # Refine specific confusions (6 vs S)
+                cleaned = refine_plate(cleaned)
+
+                # Handle confidence (can be list of char confidences or single float)
+                conf = 0.0
+                if isinstance(res.ocr.confidence, list):
+                     if res.ocr.confidence:
+                         conf = sum(res.ocr.confidence) / len(res.ocr.confidence)
+                else:
+                     conf = float(res.ocr.confidence)
+
+                # Score the plate using existing scoring logic
+                s_score = score_plate(cleaned)
+                candidates.append({
+                    'text': cleaned, 
+                    'source': 'fast-alpr', 
+                    'prob': conf, 
+                    'score': s_score
+                })
 
         # --- Select Best Candidate ---
         license_plate = "UNKNOWN"
         best_candidate = None
+        MIN_SCORE_THRESHOLD = 20  # Minimum score to consider valid
+        MIN_CONFIDENCE = 0.3  # Minimum OCR confidence
         
         if candidates:
              # Sort: Primary by Score (desc), Secondary by Probability (desc)
              candidates.sort(key=lambda x: (x['score'], x['prob']), reverse=True)
              
-             best = candidates[0]
-             print(f"DEBUG: Best Candidate: {best['text']} (Score: {best['score']}, Prob: {best['prob']}, Source: {best['source']})")
+             # Filter candidates by minimum thresholds
+             valid_candidates = [c for c in candidates if c['score'] >= MIN_SCORE_THRESHOLD and c['prob'] >= MIN_CONFIDENCE]
              
-             if best['score'] > 0:
+             if valid_candidates:
+                 best = valid_candidates[0]
+                 print(f"DEBUG: Best Candidate: {best['text']} (Score: {best['score']}, Prob: {best['prob']:.2f}, Source: {best['source']})")
+                 
                  license_plate = best['text']
                  confidence = best['prob'] # Use OCR confidence
+             else:
+                 print(f"DEBUG: No valid candidates. Best raw score: {candidates[0]['score'] if candidates else 'N/A'}")
         
         # OVERRIDE: Apply correction if exists
         if existing_correction:
@@ -1125,14 +1052,21 @@ async def analyze_image(
         return response_data
 
     except Exception as e:
-        print(f"Error: {e}")
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"ERROR in /analyze endpoint: {e}")
+        print(f"Full traceback:\n{error_trace}")
+        
+        # Return a more helpful error response
         return {
-            "vehicleType": "Error",
-            "licensePlate": "ERROR",
+            "vehicleType": "Unknown",
+            "licensePlate": "DETECTION_FAILED",
             "confidence": 0,
             "color": "Unknown",
-            "makeModel": "Unknown",
-            "description": str(e)
+            "makeModel": "Detection Error",
+            "description": f"Analysis failed: {str(e)}. Please try again with a clearer image.",
+            "tollAmount": 0,
+            "status": "error"
         }
 
 @app.post("/api/correct")

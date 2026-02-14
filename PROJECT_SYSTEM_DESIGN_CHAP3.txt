@@ -1,0 +1,70 @@
+Chapter 3: System Design (Pages 7-9)
+
+3.1 Introduction
+The system design of AutoToll AI focuses on creating a robust, modular, and scalable architecture that seamlessly integrates edge computing (for real-time inference) with cloud services (for data persistence). The design prioritizes low latency for the critical path of vehicle detection and toll deduction ensuring a smooth traffic flow.
+
+3.2 System Architecture
+
+    3.2.1 High-Level Hybrid-Cloud Architecture
+    The architecture is divided into three main layers:
+    1. Edge Layer (Toll Plaza):
+       - Components: IP Cameras, Local Processing Unit (GPU-enabled PC).
+       - Responsibility: Captures video stream, runs YOLOv8 detection, performs OCR, and handles immediate barrier control.
+       - Data Flow: Camera -> Video Frame -> AI Model -> Extracted Data.
+
+    2. Application Layer (Backend API):
+       - Components: FastAPI Server (Python).
+       - Responsibility: Receives extracted license plate data, validates against business logic, calculates toll, and manages user sessions.
+       - Data Flow: Extracted Data -> API Endpoint -> Validation Logic -> Response.
+
+    3. Data Layer (Cloud & Local):
+       - Components: Supabase (PostgreSQL) for user data/logs, SQLite for local caching.
+       - Responsibility: Stores owner details, vehicle registries, and transaction history.
+       - Data Flow: API -> Database Query -> Result.
+
+3.3 Detailed System Design
+
+    3.3.1 Module-wise Functionality
+    
+    A. Scanner Module (The "Eye" of the System):
+       - Input: RTSP Video Stream / Static Image Upload.
+       - Process:
+         1. Frame Extraction: Captures frames at 30 FPS.
+         2. Object Detection: YOLOv8 identifies 'Vehicle' and 'License Plate' bounding boxes.
+         3. Image Pre-processing: Grayscale conversion, noise reduction, and perspective correction of the plate image.
+         4. Text Recognition: EasyOCR reads the characters.
+         5. Formatting: RegEx filter cleans the output (e.g., removing spaces/special chars) to match standard formats (e.g., KA01AB1234).
+       - Output: Cleaned License Plate String + Confidence Score.
+
+    B. Registry Module (The "Bookkeeper"):
+       - Input: Administrator or User data entry.
+       - Process: Encrypts sensitive data (passwords), stores vehicle-mapping-to-owner, and maintains a wallet ledger.
+       - Features: Supports CRUD operations for managing the user base.
+
+    C. Analytics Module (The "Brain"):
+       - Process: Aggregates transaction logs to generate insights.
+       - Metrics: Daily revenue, peak traffic hours, violation counts.
+       - Visualization: Renders charts and graphs on the Admin Dashboard using React/Recharts.
+
+3.4 Use Case Diagram (Descriptive)
+
+    [ Actor: Vehicle Owner ]
+       |-- Registers Vehicle
+       |-- Tops up Wallet
+       |-- Views Trip History
+       |-- Receives Toll Notification
+
+    [ Actor: System / AI Camera ]
+       |-- Detects Vehicle
+       |-- Reads License Plate
+       |-- Queries Database
+       |-- Deducts Toll / Flags Violation
+
+    [ Actor: Administrator ]
+       |-- Logs into Dashboard
+       |-- Reviews Flagged Detections
+       |-- Manages Tariff Rates
+       |-- Generates Reports
+
+3.5 Conclusion
+The proposed design effectively separates concerns between real-time processing and data management. By offloading heavy AI tasks to a local edge processor while keeping the data centralized in the cloud, the system achieves the best of both worlds: speed and accessibility. The modular design allows for easy future upgrades, such as adding new camera streams or integrating different payment gateways without disrupting the core architecture.

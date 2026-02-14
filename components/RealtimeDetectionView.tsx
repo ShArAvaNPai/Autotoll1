@@ -104,7 +104,7 @@ export function RealtimeDetectionView() {
     };
 
     return (
-        <div className="h-full flex flex-col max-w-5xl mx-auto">
+        <div className="h-full flex flex-col max-w-5xl mx-auto overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent pr-2">
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h2 className="text-2xl font-bold text-zinc-100 flex items-center gap-2">
@@ -144,43 +144,56 @@ export function RealtimeDetectionView() {
 
             <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-0">
                 {/* Camera Feed */}
-                <div className="lg:col-span-2 bg-black rounded-2xl overflow-hidden border border-zinc-800 relative bg-zinc-950 flex flex-col">
+                <div className="lg:col-span-2 bg-black rounded-3xl overflow-hidden border border-zinc-800 relative bg-zinc-950 flex flex-col group shadow-2xl shadow-blue-900/10">
+                    {/* HUD Overlay - Corners */}
+                    <div className="absolute top-4 left-4 w-12 h-12 border-t-4 border-l-4 border-blue-500/50 rounded-tl-xl z-20"></div>
+                    <div className="absolute top-4 right-4 w-12 h-12 border-t-4 border-r-4 border-blue-500/50 rounded-tr-xl z-20"></div>
+                    <div className="absolute bottom-4 left-4 w-12 h-12 border-b-4 border-l-4 border-blue-500/50 rounded-bl-xl z-20"></div>
+                    <div className="absolute bottom-4 right-4 w-12 h-12 border-b-4 border-r-4 border-blue-500/50 rounded-br-xl z-20"></div>
+
+                    {/* Cyberpunk Grid */}
+                    <div className="absolute inset-0 z-10 opacity-20 pointer-events-none"
+                        style={{ backgroundImage: 'linear-gradient(rgba(0, 255, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.1) 1px, transparent 1px)', backgroundSize: '40px 40px' }}>
+                    </div>
+
                     {isActive ? (
                         <video
                             ref={videoRef}
                             autoPlay
                             playsInline
-                            className="w-full h-full object-contain flex-1"
+                            className="w-full h-full object-contain flex-1 relative z-0"
+                            style={{ filter: 'contrast(1.1) brightness(1.1)' }}
                         />
                     ) : (
-                        <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 gap-4">
-                            <div className="w-20 h-20 rounded-full bg-zinc-900 flex items-center justify-center">
-                                <Camera size={32} />
+                        <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 gap-4 relative z-0">
+                            <div className="w-24 h-24 rounded-full bg-zinc-900/50 border border-zinc-700 flex items-center justify-center relative">
+                                <div className="absolute inset-0 rounded-full animate-ping opacity-20 bg-blue-500"></div>
+                                <Camera size={40} className="text-zinc-600" />
                             </div>
-                            <p>Camera is offline</p>
+                            <p className="font-mono text-xs uppercase tracking-[0.2em] text-blue-500/50">System Offline</p>
                         </div>
                     )}
 
                     {/* Scanner Animation */}
                     {isActive && (
-                        <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
-                            <div className="w-full h-1 bg-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.8)] absolute top-0 animate-[scan_3s_linear_infinite]"></div>
+                        <div className="absolute inset-0 pointer-events-none overflow-hidden z-20">
+                            <div className="w-full h-2 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_20px_rgba(34,211,238,0.8)] absolute top-0 animate-[scan_2s_linear_infinite] opacity-80"></div>
                         </div>
                     )}
 
                     {/* Overlay Status */}
-                    <div className="absolute top-4 right-4 flex gap-2 z-20">
+                    <div className="absolute top-6 right-6 flex gap-3 z-30">
                         {isActive && (
-                            <div className="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-full animate-pulse flex items-center gap-2">
-                                <span className="w-2 h-2 bg-white rounded-full"></span>
-                                LIVE
+                            <div className="px-3 py-1 bg-red-500/10 text-red-500 border border-red-500/20 text-xs font-bold rounded-md animate-pulse flex items-center gap-2 backdrop-blur-md">
+                                <span className="w-1.5 h-1.5 bg-red-500 rounded-full shadow-[0_0_10px_red]"></span>
+                                LIVE FEED
                             </div>
                         )}
 
                         {isProcessing && (
-                            <div className="px-3 py-1 bg-black/50 backdrop-blur text-zinc-300 text-xs font-medium rounded-full border border-white/10 flex items-center gap-2">
+                            <div className="px-3 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 backdrop-blur-md text-xs font-bold rounded-md flex items-center gap-2">
                                 <Loader2 size={12} className="animate-spin" />
-                                Processing
+                                PROCESSING
                             </div>
                         )}
                     </div>

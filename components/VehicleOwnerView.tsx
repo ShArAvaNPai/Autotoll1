@@ -14,6 +14,8 @@ export function VehicleOwnerView({ onBack }: VehicleOwnerViewProps) {
     const [error, setError] = useState("");
     const [showPayModal, setShowPayModal] = useState(false);
     const [showUnregisteredModal, setShowUnregisteredModal] = useState(false);
+    const [activeTab, setActiveTab] = useState<'activity' | 'financials'>('activity');
+    const [transactions, setTransactions] = useState<any[]>([]);
     React.useEffect(() => {
         console.log("VehicleOwnerView mounted");
         console.log("Window Location:", window.location.href);
@@ -22,10 +24,24 @@ export function VehicleOwnerView({ onBack }: VehicleOwnerViewProps) {
     }, []);
 
     React.useEffect(() => {
-        if (result) {
-            console.log("Result updated:", result);
+        if (result && activeTab === 'financials') {
+            fetchTransactions();
         }
-    }, [result]);
+    }, [result, activeTab]);
+
+    const fetchTransactions = async () => {
+        if (!result?.owner?.id) return;
+        try {
+            const url = `${getBackendUrl()}/api/owners/${result.owner.id}/transactions`;
+            const res = await fetch(url);
+            if (res.ok) {
+                const data = await res.json();
+                setTransactions(data);
+            }
+        } catch (e) {
+            console.error("Failed to fetch transactions", e);
+        }
+    };
 
 
     const handleCheck = async (e?: React.FormEvent, manualPlate?: string) => {
@@ -323,81 +339,108 @@ export function VehicleOwnerView({ onBack }: VehicleOwnerViewProps) {
                                 <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl flex-1 flex flex-col overflow-hidden">
                                     <div className="p-8 border-b border-white/5 flex items-center justify-between">
                                         <div className="flex items-center gap-4">
-                                            <div className="p-2 bg-blue-500/10 rounded-xl">
-                                                <History className="text-blue-500" size={24} />
+                                            <div className="flex gap-2 bg-zinc-900/50 p-1 rounded-xl border border-white/5">
+                                                <button
+                                                    onClick={() => setActiveTab('activity')}
+                                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'activity' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                                >
+                                                    Activity
+                                                </button>
+                                                <button
+                                                    onClick={() => setActiveTab('financials')}
+                                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'financials' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                                >
+                                                    Financials
+                                                </button>
                                             </div>
-                                            <div>
-                                                <h3 className="text-xl font-bold text-white">Toll Activity</h3>
-                                                <p className="text-xs text-zinc-500 pt-0.5">Real-time scan history for your vehicle</p>
-                                            </div>
-                                        </div>
-                                        <div className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                                            {result.history_count || 0} Records
                                         </div>
                                     </div>
 
                                     <div className="flex-1 overflow-y-auto custom-scrollbar">
-                                        {result.history && result.history.length > 0 ? (
-                                            <div className="divide-y divide-white/5">
-                                                {result.history.map((record: any) => (
-                                                    <div key={record.id} className="p-6 hover:bg-white/5 transition-colors group">
-                                                        <div className="flex items-center gap-6">
-                                                            {/* Mini Map/Location Placeholder */}
-                                                            <div className="w-16 h-16 rounded-2xl bg-zinc-800 border border-white/10 flex items-center justify-center text-zinc-500 shrink-0 group-hover:scale-105 transition-transform overflow-hidden">
-                                                                {record.image_path ? (
-                                                                    <img src={`${getBackendUrl()}${record.image_path}`} className="w-full h-full object-cover opacity-50 group-hover:opacity-100 transition-opacity" alt="Scan" />
-                                                                ) : (
-                                                                    <MapPin size={24} />
-                                                                )}
-                                                            </div>
+                                        {activeTab === 'activity' ? (
+                                            result.history && result.history.length > 0 ? (
+                                                <div className="divide-y divide-white/5">
+                                                    {result.history.map((record: any) => (
+                                                        <div key={record.id} className="p-6 hover:bg-white/5 transition-colors group">
+                                                            <div className="flex items-center gap-6">
+                                                                {/* Mini Map/Location Placeholder */}
+                                                                <div className="w-16 h-16 rounded-2xl bg-zinc-800 border border-white/10 flex items-center justify-center text-zinc-500 shrink-0 group-hover:scale-105 transition-transform overflow-hidden">
+                                                                    {record.image_path ? (
+                                                                        <img src={`${getBackendUrl()}${record.image_path}`} className="w-full h-full object-cover opacity-50 group-hover:opacity-100 transition-opacity" alt="Scan" />
+                                                                    ) : (
+                                                                        <MapPin size={24} />
+                                                                    )}
+                                                                </div>
 
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="flex justify-between items-start mb-2">
-                                                                    <div>
-                                                                        <h4 className="font-bold text-white text-lg">Electronic Toll Gate</h4>
-                                                                        <div className="flex items-center gap-3 mt-1">
-                                                                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest flex items-center gap-1">
-                                                                                <Clock size={10} />
-                                                                                {new Date(record.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                                            </span>
-                                                                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest flex items-center gap-1">
-                                                                                <Calendar size={10} />
-                                                                                {new Date(record.timestamp).toLocaleDateString([], { day: '2-digit', month: 'short' })}
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="flex justify-between items-start mb-2">
+                                                                        <div>
+                                                                            <h4 className="font-bold text-white text-lg">Electronic Toll Gate</h4>
+                                                                            <div className="flex items-center gap-3 mt-1">
+                                                                                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest flex items-center gap-1">
+                                                                                    <Clock size={10} />
+                                                                                    {new Date(record.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                                </span>
+                                                                                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest flex items-center gap-1">
+                                                                                    <Calendar size={10} />
+                                                                                    {new Date(record.timestamp).toLocaleDateString([], { day: '2-digit', month: 'short' })}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="text-right">
+                                                                            <div className="text-xl font-bold font-mono text-white">₹{(record.toll_amount || 0).toFixed(2)}</div>
+                                                                            <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded ${record.status === 'verified' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-400'}`}>
+                                                                                {record.status}
                                                                             </span>
                                                                         </div>
                                                                     </div>
-                                                                    <div className="text-right">
-                                                                        <div className="text-xl font-bold font-mono text-white">₹{(record.toll_amount || 0).toFixed(2)}</div>
-                                                                        <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded ${record.status === 'verified' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-400'}`}>
-                                                                            {record.status}
+                                                                    <div className="flex items-center gap-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                                                                        <span>{record.vehicle_type}</span>
+                                                                        <span>•</span>
+                                                                        <span className="flex items-center gap-1">
+                                                                            AI Confidence: {record.confidence ? `${(parseFloat(record.confidence) * 100).toFixed(0)}%` : 'Manual'}
                                                                         </span>
                                                                     </div>
                                                                 </div>
-                                                                <div className="flex items-center gap-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                                                                    <span>{record.vehicle_type}</span>
-                                                                    <span>•</span>
-                                                                    <span className="flex items-center gap-1">
-                                                                        AI Confidence: {record.confidence ? `${(parseFloat(record.confidence) * 100).toFixed(0)}%` : 'Manual'}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="hidden md:flex flex-col items-center">
-                                                                <button className="p-2 text-zinc-600 hover:text-white transition-colors">
-                                                                    <ExternalLink size={18} />
-                                                                </button>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="h-full flex flex-col items-center justify-center text-zinc-500 space-y-4 py-20">
-                                                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center">
-                                                    <History size={32} className="opacity-20" />
+                                                    ))}
                                                 </div>
-                                                <p className="font-medium">No activity history found for this vehicle.</p>
-                                            </div>
+                                            ) : (
+                                                <div className="h-full flex flex-col items-center justify-center text-zinc-500 space-y-4 py-20">
+                                                    <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center">
+                                                        <History size={32} className="opacity-20" />
+                                                    </div>
+                                                    <p className="font-medium">No activity history found for this vehicle.</p>
+                                                </div>
+                                            )
+                                        ) : (
+                                            transactions.length > 0 ? (
+                                                <div className="divide-y divide-white/5">
+                                                    {transactions.map((tx: any) => (
+                                                        <div key={tx.id} className="p-6 hover:bg-white/5 transition-colors">
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center gap-4">
+                                                                    <div className={`p-3 rounded-full ${tx.amount > 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                                                                        {tx.amount > 0 ? <CreditCard size={20} /> : <Activity size={20} />}
+                                                                    </div>
+                                                                    <div>
+                                                                        <h4 className="font-bold text-white text-base">{tx.description}</h4>
+                                                                        <p className="text-xs text-zinc-500">{new Date(tx.timestamp).toLocaleString()}</p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className={`text-lg font-bold font-mono ${tx.amount > 0 ? 'text-emerald-500' : 'text-white'}`}>
+                                                                    {tx.amount > 0 ? '+' : ''}₹{tx.amount}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="h-full flex flex-col items-center justify-center text-zinc-500 space-y-4 py-20">
+                                                    <p className="font-medium">No financial transactions found.</p>
+                                                </div>
+                                            )
                                         )}
                                     </div>
                                 </div>

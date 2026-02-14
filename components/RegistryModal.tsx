@@ -14,6 +14,7 @@ export function RegistryModal({ isOpen, onClose, editItem, onSuccess }: Registry
     const [contact, setContact] = useState("");
     const [plate, setPlate] = useState("");
     const [model, setModel] = useState("");
+    const [vehicleType, setVehicleType] = useState("Car");
     const [photo, setPhoto] = useState<File | null>(null);
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -25,6 +26,7 @@ export function RegistryModal({ isOpen, onClose, editItem, onSuccess }: Registry
             setContact(editItem.contact_info || "");
             setPlate(editItem.license_plate);
             setModel(editItem.make_model);
+            setVehicleType(editItem.vehicle_type || "Car");
             setPhoto(null);
             setPreview(editItem.owner_photo ? `${getBackendUrl()}${editItem.owner_photo}` : null);
         } else {
@@ -38,6 +40,7 @@ export function RegistryModal({ isOpen, onClose, editItem, onSuccess }: Registry
         setContact("");
         setPlate("");
         setModel("");
+        setVehicleType("Car");
         setPhoto(null);
         setPreview(null);
     };
@@ -53,6 +56,7 @@ export function RegistryModal({ isOpen, onClose, editItem, onSuccess }: Registry
             formData.append('contact_info', contact);
             formData.append('license_plate', plate.toUpperCase());
             formData.append('make_model', model);
+            formData.append('vehicle_type', vehicleType);
             if (photo) formData.append('photo', photo);
 
             // If editing, we update vehicle. Wait, API structure:
@@ -193,6 +197,21 @@ export function RegistryModal({ isOpen, onClose, editItem, onSuccess }: Registry
                                         onChange={e => setModel(e.target.value)}
                                     />
                                 </div>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm text-zinc-400">Vehicle Type</label>
+                                <select
+                                    required
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:border-emerald-500 focus:outline-none transition-colors cursor-pointer"
+                                    value={vehicleType}
+                                    onChange={e => setVehicleType(e.target.value)}
+                                >
+                                    <option value="Car">Car</option>
+                                    <option value="Motorcycle">Motorcycle</option>
+                                    <option value="Bus">Bus</option>
+                                    <option value="Truck">Truck</option>
+                                    <option value="Van">Van</option>
+                                </select>
                             </div>
                         </div>
 

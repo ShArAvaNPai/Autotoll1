@@ -170,21 +170,23 @@ export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedIma
         method: 'DELETE'
       });
       if (res.ok) {
+        setLocalResult(null); // Clear the result state to hide the card
         setPreview(null);
         onClear?.();
       }
     } catch (e) {
       console.error(e);
+      alert("Failed to discard detection. Please try again.");
     } finally {
       setIsDiscarding(false);
     }
   };
 
   return (
-    <div className="h-full flex flex-col gap-4">
+    <div className="h-full flex flex-col gap-4 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent pr-2">
       {/* ... (upload area) ... */}
-      <div className={`flex-1 relative rounded-2xl border-2 transition-all overflow-hidden bg-zinc-950 shadow-xl flex flex-col items-center justify-center
-        ${dragActive ? 'border-blue-500 bg-blue-500/10' : 'border-dashed border-zinc-800'}`}
+      <div className={`flex-1 relative rounded-2xl border transition-all overflow-hidden bg-zinc-950/50 flex flex-col items-center justify-center group/drop
+        ${dragActive ? 'border-blue-500 bg-blue-500/10 scale-[0.98]' : 'border-white/5 hover:border-white/10 hover:bg-zinc-900/50'}`}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
         onDragOver={handleDrag}
@@ -198,7 +200,7 @@ export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedIma
               <button onClick={captureImage} className="w-16 h-16 rounded-full border-4 border-white flex items-center justify-center hover:bg-white/20 transition-colors">
                 <div className="w-12 h-12 bg-white rounded-full"></div>
               </button>
-              <button onClick={stopCamera} className="w-12 h-12 rounded-full bg-red-500/80 text-white flex items-center justify-center backdrop-blur-sm">
+              <button onClick={stopCamera} className="w-12 h-12 rounded-full bg-red-500/80 text-white flex items-center justify-center backdrop-blur-sm shadow-lg hover:bg-red-600 transition-colors">
                 <X size={20} />
               </button>
             </div>
@@ -206,44 +208,48 @@ export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedIma
         ) : preview ? (
           <div className="absolute inset-0 group">
             <img src={preview} alt="Preview" className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 backdrop-blur-sm">
-              <button onClick={() => fileInputRef.current?.click()} className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-all">
+            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 backdrop-blur-sm">
+              <button onClick={() => fileInputRef.current?.click()} className="p-4 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-all hover:scale-110">
                 <Upload size={24} />
               </button>
-              <button onClick={() => { setPreview(null); startCamera(); }} className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-all">
+              <button onClick={() => { setPreview(null); startCamera(); }} className="p-4 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-all hover:scale-110">
                 <Camera size={24} />
               </button>
             </div>
             {isAnalyzing && (
-              <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
-                <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
-                <p className="text-zinc-200 font-medium animate-pulse">Analyzing Vehicle...</p>
-                <p className="text-sm text-zinc-500 mt-1">Detecting plates & features</p>
+              <div className="absolute inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center z-10">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-blue-500 blur-xl opacity-20 animate-pulse"></div>
+                  <Loader2 className="w-16 h-16 text-blue-500 animate-spin mb-6 relative z-10" strokeWidth={1.5} />
+                </div>
+                <p className="text-xl font-bold text-white tracking-widest animate-pulse">ANALYZING</p>
+                <p className="text-sm text-blue-400 mt-2 font-medium">Extracting Plate Data...</p>
               </div>
             )}
           </div>
         ) : (
-          <div className="text-center p-8">
-            <div className="w-20 h-20 bg-zinc-900 rounded-full flex items-center justify-center mx-auto mb-6 border border-zinc-800">
-              <ScanLine className="w-10 h-10 text-zinc-500 group-hover:text-blue-500 transition-colors" />
+          <div className="text-center p-8 relative z-10">
+            <div className="w-24 h-24 bg-zinc-900/50 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-white/5 group-hover/drop:scale-110 transition-transform duration-500 relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/10 to-transparent opacity-0 group-hover/drop:opacity-100 transition-opacity"></div>
+              <ScanLine className="w-10 h-10 text-zinc-600 group-hover/drop:text-blue-400 transition-colors duration-300" strokeWidth={1.5} />
             </div>
-            <h3 className="text-xl font-semibold text-zinc-200 mb-2">Scan Vehicle</h3>
-            <p className="text-zinc-500 mb-8 max-w-xs mx-auto">Drag & drop an image or use the camera to start detection.</p>
+            <h3 className="text-xl font-bold text-white mb-2 tracking-tight">Scan Vehicle</h3>
+            <p className="text-zinc-500 mb-8 max-w-xs mx-auto text-sm">Drag & drop or use camera to detect license plates</p>
 
-            <div className="flex items-center justify-center gap-4">
+            <div className="flex items-center justify-center gap-3">
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors flex items-center gap-2 font-medium"
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all hover:shadow-lg hover:shadow-blue-900/20 flex items-center gap-2 font-semibold text-sm group"
               >
-                <Upload size={18} />
+                <Upload size={16} className="group-hover:-translate-y-0.5 transition-transform" />
                 Upload File
               </button>
               <button
                 onClick={startCamera}
-                className="px-6 py-2.5 bg-zinc-900 border border-zinc-800 text-zinc-300 rounded-lg hover:bg-zinc-800 transition-colors flex items-center gap-2 font-medium"
+                className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-xl transition-all border border-white/5 flex items-center gap-2 font-semibold text-sm group"
               >
-                <Camera size={18} />
-                Use Camera
+                <Camera size={16} className="group-hover:scale-110 transition-transform" />
+                Camera
               </button>
             </div>
           </div>

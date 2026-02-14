@@ -1,0 +1,63 @@
+Chapter 1: Synopsis (Pages 1-3)
+
+1.1 Title of the Project: AutoToll AI - Smart Automated Toll Collection System
+
+1.2 Objective of the Project
+The primary objective of the AutoToll AI project is to design and develop an automated toll collection system that leverages artificial intelligence and computer vision to streamline traffic flow and reduce manual intervention. Key objectives include:
+- Automating the detection and recognition of vehicle license plates using YOLOv8 and EasyOCR.
+- Reducing wait times and congestion at toll plazas by eliminating cash transactions.
+- Replacing manual toll collection with a digital wallet deduction system.
+- Maintaining a comprehensive database of registered vehicles, owners, and transaction history.
+- Providing a user-friendly interface for both administrators to monitor traffic and vehicle owners to manage their accounts.
+
+1.3 Project Category: AI-Based Transportation & IoT
+
+1.4 Software Interface
+- Frontend Framework: React.js with Vite
+- Styling: Tailwind CSS
+- Backend Framework: Python FastAPI
+- Database: Supabase (PostgreSQL) / SQLite
+- AI/ML Libraries: YOLOv8 (Object Detection), EasyOCR (Text Recognition), OpenCV (Image Processing)
+- Programming Languages: Python, TypeScript
+- Operating System Compatibility: Linux / Windows 10 and above
+
+1.5 Hardware Requirements
+- Processing Unit: Multi-core CPU (Intel i5/Ryzen 5 or better) with dedicated GPU recommended for optimal AI inference.
+- Memory (RAM): Minimum 8GB (16GB recommended).
+- Storage: 256GB SSD or higher for caching images and database records.
+- Camera: High-resolution IP camera or webcam capable of capturing clear images of moving vehicles.
+- Internet Connectivity: Stable broadband connection for cloud database synchronization and payment processing.
+
+1.6 Module Description
+
+    1.6.1 User Roles: Administrator & Vehicle Owner
+    - Administrator: The superuser with full access to the system. Responsibilities include monitoring the live toll feed, managing the registered vehicle database, viewing financial reports, and handling manual reviews for low-confidence detections.
+    - Vehicle Owner: A registered user who can log in to the portal to view their vehicle's travel history, check their current wallet balance, and top up their account using integrated payment gateways.
+
+    1.6.2 System Modules
+    1. Detection Module: Captures real-time video feed, detects vehicles, crops the license plate area, and performs Optical Character Recognition (OCR) to extract the registration number.
+    2. Registry & Authentication Module: Validates the detected license plate against the centralized database to check for valid registration and adequate wallet balance.
+    3. Transaction & Payment Module: Automatically calculates the toll fee based on vehicle type, deducts the amount from the user's wallet, and logs the transaction.
+    4. Dashboard & Reporting Module: Visualizes data for administrators, showing daily traffic counts, revenue collected, and system health status.
+
+    1.6.3 Functional Overview
+    The system workflow begins when a vehicle enters the camera's field of view. The AI model detects the vehicle and localizes the license plate. The plate image is processed to extract alphanumeric text. This text is sent to the backend, which queries the database. If the vehicle is registered, the system checks the owner's wallet. If funds are sufficient, the toll is deducted, a success message is displayed (simulating a boom barrier opening), and the user is notified. If unregistered or insufficient funds, an alert is triggered for manual action.
+
+1.7 Relevance and applicability of the project
+- Intelligent Transportation Systems (ITS): Essential for modern smart cities to manage traffic efficiently.
+- Efficiency: Significantly reduces the time per transaction compared to manual toll booths.
+- Accuracy: Minimizes human error in logging entries and calculating fees.
+- Scalability: Can be deployed across multiple toll plazas with a centralized synced database.
+- Data Analytics: Provides valuable insights into traffic patterns for urban planning.
+
+1.8 Limitations
+- Environmental Conditions: Extreme weather (heavy rain, fog) or poor lighting may impact the accuracy of the camera and AI detection.
+- Hardware Dependency: Requires decent computational power for real-time video processing; low-end hardware may cause latency.
+- Occlusion: Muddy, damaged, or obstructed license plates cannot be read accurately by the OCR system.
+- Network Reliance: Requires consistent internet connectivity for database updates and payment processing.
+
+1.9 Future Scope of the Project
+- FastTag/RFID Integration: Combining vision-based detection with RFID tags for dual-factor authentication and higher reliability.
+- Mobile Application: Developing a native mobile app for vehicle owners to receive push notifications and pay tolls on the go.
+- Vehicle Classification: Enhancing the AI to automatically classify vehicle types (Car, Truck, Bus) for dynamic toll pricing.
+- Speed Enforcement: Integrating speed detection to automatically penalize speeding vehicles at the toll point.

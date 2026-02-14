@@ -1,0 +1,103 @@
+INDEX
+
+Chapter 1: Synopsis (Pages 1-3)
+1.1 Title of the Project: AutoToll AI - Smart Automated Toll Collection System
+1.2 Objective of the Project
+1.3 Project Category: AI-Based Transportation & IoT
+1.4 Software Interface
+1.5 Hardware Requirements
+1.6 Module Description
+    1.6.1 User Roles: Administrator & Vehicle Owner
+    1.6.2 System Modules
+    1.6.3 Functional Overview
+1.7 Relevance and applicability of the project
+1.8 Limitations
+1.9 Future Scope of the Project
+
+Chapter 2: Software Requirement Specifications (Pages 4-6)
+2.1 Introduction
+2.2 Purpose
+2.3 Scope
+2.4 Functional Requirements
+    2.4.1 Real-time Vehicle Capture
+    2.4.2 Automatic License Plate Recognition (ALPR)
+    2.4.3 Automatic Toll Deduction & Wallet Management
+    2.4.4 Manual Review Queue for Low Confidence Cases
+2.5 Non-Functional Requirements
+    2.5.1 Performance Requirements (Latency & Accuracy)
+    2.5.2 Usability Requirements (Responsive Dashboard)
+    2.5.3 Scalability (Multi-lane Support)
+    2.5.4 Reliability & Data Integrity
+2.6 Software Requirements
+    2.6.1 Frontend: React.js, Tailwind CSS, Vite
+    2.6.2 Backend: Python, FastAPI
+    2.6.3 Databases: SQLite (Local) & Supabase (Remote)
+    2.6.4 AI Tools: YOLOv8, EasyOCR, Google Gemini API
+2.7 System Architecture
+2.8 Assumptions and Constraints
+    2.8.1 Assumptions
+    2.8.2 Constraints
+
+Chapter 3: System Design (Pages 7-9)
+3.1 Introduction
+3.2 System Architecture
+    3.2.1 High-Level Hybrid-Cloud Architecture
+3.3 Detailed System Design
+    3.3.1 Module-wise Functionality (Scanner, Registry, Analytics)
+3.4 Use Case Diagram
+3.5 Conclusion
+
+Chapter 4: Database Design (Pages 10-12)
+4.1 Introduction
+4.2 Dataset Overview (Vehicle & License Plate Dataset)
+4.3 Dataset Structure
+4.4 Annotation Format (YOLO V8 Format)
+4.5 Number of Records
+4.6 Data Classes (Vehicle Types: Car, LCV, Bus/Truck)
+4.7 Data Splitting
+4.8 Justification for Dataset Choice
+4.9 Conclusion
+
+Chapter 5: Detail Design (Pages 13-15)
+5.1 Introduction
+5.2 System Overview
+5.3 Module-wise Detailed Design
+    5.3.1 Live Monitoring & Detection Module
+    5.3.2 Vehicle Registry & Owner Portal
+    5.3.3 Funds & Wallet Management Module
+    5.3.4 ALPR Processing (YOLO + OCR Pipeline)
+    5.3.5 Reports & Analytics Module
+5.4 Structure Chart
+5.5 Conclusion
+
+Chapter 6: Coding (Pages 16-21)
+6.1 Introduction
+6.2 Programing Practices
+    6.2.1 Top-down & Bottom-up Approaches
+    6.2.2 Structured Programming
+6.3 Verification
+6.4 Source Code (Pages 17-21)
+
+Chapter 7: Testing (Pages 22-25)
+7.1 Introduction
+7.2 Testing Objectives
+7.3 Testing Methods
+7.4 Testing Steps
+    7.4.1 Unit Testing (API Endpoints & Components)
+    7.4.2 Integration Testing (Frontend-Backend Data Flow)
+    7.4.3 Validation Testing (OCR Accuracy Benchmarks)
+    7.4.4 Output Testing
+7.5 User Acceptance Testing
+7.6 Test Cases
+
+Chapter 8: Screenshots (Pages 26-28)
+8.1 Admin Dashboard & Live Monitor
+8.2 Licensed Plate Recognition Results
+8.3 Vehicle Owner Wallet & History
+8.4 Analytics & Reporting View
+
+Chapter 9: Conclusion and Future Enhancement (Pages 29-30)
+9.1 Conclusion
+9.2 Future Enhancement (Edge Computing & OCR Optimization)
+
+Chapter 10: Bibliography (Pages 31-32)

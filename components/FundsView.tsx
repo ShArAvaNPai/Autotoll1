@@ -40,7 +40,7 @@ export function FundsView() {
     );
 
     return (
-        <div className="max-w-7xl mx-auto space-y-8 h-full flex flex-col pb-20">
+        <div className="max-w-7xl mx-auto space-y-8 flex flex-col pb-20">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>

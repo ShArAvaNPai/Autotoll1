@@ -9,6 +9,7 @@ interface RegistryItem {
     id: number;
     license_plate: string;
     make_model: string;
+    vehicle_type?: string;
     owner_id: number;
     owner_name?: string;
     contact_info?: string;
@@ -104,7 +105,7 @@ export function Registry({ initialPlate }: RegistryProps) {
     );
 
     return (
-        <div className="max-w-7xl mx-auto space-y-8 h-full flex flex-col">
+        <div className="max-w-7xl mx-auto space-y-8 flex flex-col">
 
             {/* Header / Actions */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -174,14 +175,20 @@ export function Registry({ initialPlate }: RegistryProps) {
                         </div>
 
                         <div className="space-y-4">
-                            <div className="p-4 bg-black/40 rounded-2xl border border-white/5 flex items-center justify-between">
-                                <div>
-                                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Vehicle</p>
-                                    <p className="text-zinc-300 font-medium text-sm">{v.make_model}</p>
+                            <div className="p-4 bg-black/40 rounded-2xl border border-white/5">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Vehicle Type</p>
+                                        <p className="text-zinc-300 font-medium text-sm">{v.vehicle_type || 'Car'}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Plate</p>
+                                        <p className="text-white font-mono font-bold tracking-wider">{v.license_plate}</p>
+                                    </div>
                                 </div>
-                                <div className="text-right">
-                                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Plate</p>
-                                    <p className="text-white font-mono font-bold tracking-wider">{v.license_plate}</p>
+                                <div className="mt-3 pt-3 border-t border-white/5">
+                                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Make & Model</p>
+                                    <p className="text-zinc-300 font-medium text-sm">{v.make_model}</p>
                                 </div>
                             </div>
 

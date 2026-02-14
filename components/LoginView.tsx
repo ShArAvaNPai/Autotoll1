@@ -79,18 +79,18 @@ export function LoginView({ onLogin }: LoginViewProps) {
             </div>
 
             {/* Role Selection Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-5xl z-10">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-5xl z-10 perspective-1000">
                 {/* Admin Card */}
                 <div
                     onClick={() => setShowAdminLogin(true)}
                     onMouseEnter={() => setHoveredCard('admin')}
                     onMouseLeave={() => setHoveredCard(null)}
-                    className="group relative cursor-pointer"
+                    className="group relative cursor-pointer transform transition-transform duration-500 hover:scale-105 hover:rotate-y-6"
                 >
                     {/* Hover glow */}
                     <div className={`absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl blur-xl transition-opacity duration-500 ${hoveredCard === 'admin' ? 'opacity-30' : 'opacity-0'}`} />
 
-                    <div className="relative bg-gradient-to-br from-zinc-900/90 to-zinc-950/90 backdrop-blur-xl border border-zinc-800/50 hover:border-blue-500/30 rounded-3xl p-10 transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-blue-900/30 overflow-hidden">
+                    <div className="relative h-full bg-gradient-to-br from-zinc-900/90 to-zinc-950/90 backdrop-blur-xl border border-zinc-800/50 hover:border-blue-500/30 rounded-3xl p-8 transition-all duration-500 hover:shadow-2xl hover:shadow-blue-900/30 overflow-hidden flex flex-col">
                         {/* Corner accent */}
                         <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-500/10 to-transparent rounded-bl-full" />
 
@@ -101,27 +101,27 @@ export function LoginView({ onLogin }: LoginViewProps) {
 
                         {/* Main icon */}
                         <div className="mb-8">
-                            <div className="relative w-24 h-24">
+                            <div className="relative w-20 h-20">
                                 <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/30 to-indigo-500/30 rounded-2xl rotate-6 group-hover:rotate-12 transition-transform duration-500" />
                                 <div className="absolute inset-0 bg-gradient-to-tr from-blue-600/20 to-indigo-600/20 rounded-2xl -rotate-3 group-hover:-rotate-6 transition-transform duration-500" />
                                 <div className="relative w-full h-full bg-gradient-to-tr from-blue-500/10 to-indigo-500/10 rounded-2xl flex items-center justify-center border border-blue-500/20 group-hover:scale-105 transition-transform duration-500">
-                                    <ShieldCheck className="w-10 h-10 text-blue-400" strokeWidth={1.5} />
+                                    <ShieldCheck className="w-8 h-8 text-blue-400" strokeWidth={1.5} />
                                 </div>
                             </div>
                         </div>
 
                         {/* Content */}
-                        <div className="space-y-3">
-                            <h3 className="text-2xl font-bold text-white tracking-tight">Administrator</h3>
-                            <p className="text-zinc-500 leading-relaxed">
-                                Full dashboard access with real-time monitoring, vehicle registry management, and comprehensive analytics.
+                        <div className="space-y-3 flex-1">
+                            <h3 className="text-xl font-bold text-white tracking-tight">Administrator</h3>
+                            <p className="text-zinc-500 text-sm leading-relaxed">
+                                Full dashboard access, real-time monitoring, and system configuration.
                             </p>
                         </div>
 
                         {/* CTA */}
-                        <div className="mt-8 flex items-center gap-2 text-blue-400 font-medium opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-[-20px] group-hover:translate-x-0">
-                            <span>Access Dashboard</span>
-                            <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                        <div className="mt-8 flex items-center gap-2 text-blue-400 font-bold text-sm opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-[-20px] group-hover:translate-x-0">
+                            <span>Access Console</span>
+                            <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
                         </div>
                     </div>
                 </div>
@@ -131,12 +131,12 @@ export function LoginView({ onLogin }: LoginViewProps) {
                     onClick={() => onLogin('owner')}
                     onMouseEnter={() => setHoveredCard('owner')}
                     onMouseLeave={() => setHoveredCard(null)}
-                    className="group relative cursor-pointer"
+                    className="group relative cursor-pointer transform transition-transform duration-500 hover:scale-105 hover:rotate-y-6"
                 >
                     {/* Hover glow */}
                     <div className={`absolute inset-0 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-3xl blur-xl transition-opacity duration-500 ${hoveredCard === 'owner' ? 'opacity-30' : 'opacity-0'}`} />
 
-                    <div className="relative bg-gradient-to-br from-zinc-900/90 to-zinc-950/90 backdrop-blur-xl border border-zinc-800/50 hover:border-emerald-500/30 rounded-3xl p-10 transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-emerald-900/30 overflow-hidden">
+                    <div className="relative h-full bg-gradient-to-br from-zinc-900/90 to-zinc-950/90 backdrop-blur-xl border border-zinc-800/50 hover:border-emerald-500/30 rounded-3xl p-8 transition-all duration-500 hover:shadow-2xl hover:shadow-emerald-900/30 overflow-hidden flex flex-col">
                         {/* Corner accent */}
                         <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-emerald-500/10 to-transparent rounded-bl-full" />
 
@@ -147,38 +147,38 @@ export function LoginView({ onLogin }: LoginViewProps) {
 
                         {/* Main icon */}
                         <div className="mb-8">
-                            <div className="relative w-24 h-24">
+                            <div className="relative w-20 h-20">
                                 <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/30 to-teal-500/30 rounded-2xl rotate-6 group-hover:rotate-12 transition-transform duration-500" />
                                 <div className="absolute inset-0 bg-gradient-to-tr from-emerald-600/20 to-teal-600/20 rounded-2xl -rotate-3 group-hover:-rotate-6 transition-transform duration-500" />
                                 <div className="relative w-full h-full bg-gradient-to-tr from-emerald-500/10 to-teal-500/10 rounded-2xl flex items-center justify-center border border-emerald-500/20 group-hover:scale-105 transition-transform duration-500">
-                                    <Car className="w-10 h-10 text-emerald-400" strokeWidth={1.5} />
+                                    <Car className="w-8 h-8 text-emerald-400" strokeWidth={1.5} />
                                 </div>
                             </div>
                         </div>
 
                         {/* Content */}
-                        <div className="space-y-3">
-                            <h3 className="text-2xl font-bold text-white tracking-tight">Vehicle Owner</h3>
-                            <p className="text-zinc-500 leading-relaxed">
-                                Manage your vehicle registration, view toll history, check balance, and make secure payments.
+                        <div className="space-y-3 flex-1">
+                            <h3 className="text-xl font-bold text-white tracking-tight">Vehicle Owner</h3>
+                            <p className="text-zinc-500 text-sm leading-relaxed">
+                                Manage registration, view toll history, and check wallet balance.
                             </p>
                         </div>
 
                         {/* CTA */}
-                        <div className="mt-8 flex items-center gap-2 text-emerald-400 font-medium opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-[-20px] group-hover:translate-x-0">
+                        <div className="mt-8 flex items-center gap-2 text-emerald-400 font-bold text-sm opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-[-20px] group-hover:translate-x-0">
                             <span>Open Portal</span>
-                            <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                            <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Footer */}
-            <div className="mt-16 text-zinc-600 text-sm z-10 flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>System Online</span>
-                <span className="mx-2">•</span>
-                <span>&copy; {new Date().getFullYear()} AutoToll AI</span>
+            <div className="mt-16 text-zinc-600 text-xs font-medium tracking-widest uppercase z-10 flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+                <span>System Online v2.5</span>
+                <span className="mx-2 text-zinc-800">|</span>
+                <span>AutoToll AI &copy; {new Date().getFullYear()}</span>
             </div>
 
             {/* Admin Login Modal */}

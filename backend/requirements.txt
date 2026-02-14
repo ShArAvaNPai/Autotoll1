@@ -3,7 +3,7 @@ uvicorn
 ultralytics
 python-multipart
 pillow
-easyocr
+fast-alpr
 opencv-python-headless
 sqlalchemy
 pandas

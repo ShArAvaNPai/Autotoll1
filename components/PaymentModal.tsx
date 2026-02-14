@@ -10,49 +10,73 @@ interface PaymentModalProps {
 }
 
 export function PaymentModal({ plate, onClose, onSuccess, initialAmount = 100 }: PaymentModalProps) {
-    const [step, setStep] = useState<'selection' | 'upi_scan' | 'netbanking_select' | 'processing' | 'success'>('selection');
+    const [step, setStep] = useState<'selection' | 'upi_scan' | 'netbanking_select' | 'netbanking_details' | 'processing' | 'success'>('selection');
     const [selectedMethod, setSelectedMethod] = useState<string>('');
     const [amount, setAmount] = useState(initialAmount);
     const [isLoading, setIsLoading] = useState(false);
     const [selectedBank, setSelectedBank] = useState('');
+    const [accountNumber, setAccountNumber] = useState('');
+    const [ifscCode, setIfscCode] = useState('');
+    const [accountHolderName, setAccountHolderName] = useState('');
 
     const methods = [
-        { id: 'card', name: 'Credit / Debit Card', icon: CreditCard, color: 'text-blue-500' },
-        { id: 'upi', name: 'UPI / QR Code', icon: Smartphone, color: 'text-emerald-500' },
-        { id: 'wallet', name: 'Digital Wallet', icon: Wallet, color: 'text-amber-500' },
-        { id: 'netbanking', name: 'Net Banking', icon: Landmark, color: 'text-purple-500' }
+        { id: 'razorpay', name: 'Razorpay Secure Gateway', icon: ShieldCheck, color: 'text-emerald-500' }
     ];
 
-    const banks = [
-        "HDFC Bank", "SBI", "ICICI Bank", "Axis Bank", "Kotak Mahindra Bank"
-    ];
-
+    // Auto-select Razorpay since it's the only one
+    useState(() => {
+        setSelectedMethod('razorpay');
+    });
 
     const handleProceed = () => {
         if (!selectedMethod) {
             alert("Please select a payment method.");
             return;
         }
-        if (selectedMethod === 'upi') {
-            setStep('upi_scan');
-        } else if (selectedMethod === 'netbanking') {
-            setStep('netbanking_select');
-        } else {
-            handleFinalPayment();
+
+        // Direct Razorpay Integration
+        const options = {
+            key: "rzp_test_SC7GZQVzAK7jRK",
+            amount: amount * 100, // Amount in paise
+            currency: "INR",
+            name: "AutoToll AI",
+            description: `Wallet Recharge for ${plate}`,
+            image: `${getBackendUrl()}/uploads/logo_placeholder.png`,
+            handler: function (response: any) {
+                console.log("Razorpay Payment Success:", response);
+                handleFinalPayment(response.razorpay_payment_id);
+            },
+            prefill: {
+                name: "Vehicle Owner",
+                email: "owner@autotoll.ai",
+                contact: "9999999999" // Dummy contact for test mode
+            },
+            theme: {
+                color: "#10b981" // Emerald-500
+            }
+        };
+
+        try {
+            const rzp1 = new (window as any).Razorpay(options);
+            rzp1.open();
+            rzp1.on('payment.failed', function (response: any) {
+                alert("Payment Failed: " + response.error.description);
+            });
+        } catch (error) {
+            console.error("Razorpay Error:", error);
+            alert("Failed to load Razorpay SDK. Please check your internet connection.");
         }
     };
 
-    const handleFinalPayment = async () => {
+    const handleFinalPayment = async (paymentId: string) => {
         setIsLoading(true);
         setStep('processing');
 
         try {
-            // Simulate processing time
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
             const formData = new FormData();
             formData.append('license_plate', plate);
             formData.append('amount', amount.toString());
+            formData.append('payment_id', paymentId); // Log the ID if needed backend side
 
             const res = await fetch(`${getBackendUrl()}/api/owner/add_balance`, {
                 method: 'POST',
@@ -97,7 +121,6 @@ export function PaymentModal({ plate, onClose, onSuccess, initialAmount = 100 }:
                             <ShieldCheck className="text-emerald-500" size={20} />
                         </div>
                         <h2 className="text-xl font-bold text-white tracking-tight">Add Balance</h2>
-                        <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-500 text-[10px] font-bold border border-amber-500/20">TEST MODE</span>
                     </div>
                     <p className="text-zinc-500 text-sm">Secure wallet recharge for <span className="text-zinc-200 font-mono font-bold">{plate}</span></p>
                 </div>
@@ -119,27 +142,22 @@ export function PaymentModal({ plate, onClose, onSuccess, initialAmount = 100 }:
                                 </div>
                             </div>
 
-                            {/* Method List */}
+                            {/* Method List - Simplified */}
                             <div className="space-y-3">
                                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-1">Payment Method</label>
-                                <div className="grid grid-cols-1 gap-2">
-                                    {methods.map((m) => (
-                                        <button
-                                            key={m.id}
-                                            onClick={() => setSelectedMethod(m.id)}
-                                            className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${selectedMethod === m.id ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-white/5 border-white/5 hover:border-white/10'}`}
-                                        >
-                                            <div className="flex items-center gap-4">
-                                                <div className={`p-2 rounded-lg bg-zinc-800 ${m.color}`}>
-                                                    <m.icon size={20} />
-                                                </div>
-                                                <span className={`font-semibold text-sm ${selectedMethod === m.id ? 'text-white' : 'text-zinc-400'}`}>{m.name}</span>
-                                            </div>
-                                            {selectedMethod === m.id && <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
-                                                <CheckCircle size={12} className="text-zinc-900" />
-                                            </div>}
-                                        </button>
-                                    ))}
+                                <div className="p-4 rounded-2xl border bg-emerald-500/10 border-emerald-500/30 flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-2 rounded-lg bg-zinc-800 text-emerald-500">
+                                            <ShieldCheck size={20} />
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="font-semibold text-sm text-white">Razorpay Secure</span>
+                                            <span className="text-[10px] text-zinc-400">Cards, UPI, Netbanking</span>
+                                        </div>
+                                    </div>
+                                    <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                                        <CheckCircle size={12} className="text-zinc-900" />
+                                    </div>
                                 </div>
                             </div>
 
@@ -149,61 +167,6 @@ export function PaymentModal({ plate, onClose, onSuccess, initialAmount = 100 }:
                             >
                                 <span>Proceed to Pay ₹{amount.toLocaleString()}</span>
                                 <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                            </button>
-                        </div>
-                    )}
-
-                    {step === 'upi_scan' && (
-                        <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                            <div className="bg-white p-4 rounded-2xl mx-auto w-48 h-48 flex items-center justify-center shadow-lg transform transition-all hover:scale-105">
-                                <img src={`${getBackendUrl()}/uploads/dummy_qr.png`} alt="UPI QR" className="w-full h-full object-contain" />
-                            </div>
-                            <div className="text-center space-y-2">
-                                <p className="text-white font-bold">Scan with any UPI App</p>
-                                <p className="text-zinc-500 text-xs">GPay, PhonePe, Paytm, etc.</p>
-                            </div>
-
-                            <button
-                                onClick={handleFinalPayment}
-                                className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl transition-all shadow-lg text-sm"
-                            >
-                                I have made the payment
-                            </button>
-                            <button
-                                onClick={() => setStep('selection')}
-                                className="w-full py-3 text-zinc-500 hover:text-white text-sm transition-colors"
-                            >
-                                Go Back
-                            </button>
-                        </div>
-                    )}
-
-                    {step === 'netbanking_select' && (
-                        <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-1">Select Bank</label>
-                            <div className="grid grid-cols-1 gap-2">
-                                {banks.map(bank => (
-                                    <button
-                                        key={bank}
-                                        onClick={() => setSelectedBank(bank)}
-                                        className={`p-4 rounded-xl border text-left font-medium text-sm transition-all ${selectedBank === bank ? 'bg-indigo-500 text-white border-transparent' : 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10'}`}
-                                    >
-                                        {bank}
-                                    </button>
-                                ))}
-                            </div>
-                            <button
-                                onClick={handleFinalPayment}
-                                disabled={!selectedBank}
-                                className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-2xl transition-all shadow-lg text-sm mt-4"
-                            >
-                                Pay Securely
-                            </button>
-                            <button
-                                onClick={() => setStep('selection')}
-                                className="w-full py-3 text-zinc-500 hover:text-white text-sm transition-colors"
-                            >
-                                Go Back
                             </button>
                         </div>
                     )}
@@ -219,7 +182,6 @@ export function PaymentModal({ plate, onClose, onSuccess, initialAmount = 100 }:
                             <div>
                                 <h3 className="text-2xl font-bold text-white mb-2">Processing Payment</h3>
                                 <p className="text-zinc-500 text-sm">Please do not refresh or close this window...</p>
-                                {selectedMethod === 'netbanking' && <p className="text-indigo-400 text-xs mt-2">Connecting to {selectedBank}...</p>}
                             </div>
                         </div>
                     )}

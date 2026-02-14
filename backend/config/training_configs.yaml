@@ -1,0 +1,38 @@
+# ALPR Training Configuration Profiles
+# Select profile based on your requirements and available resources
+
+# Fast Training: Quick iterations for experimentation
+fast_training:
+  model: yolo11n.pt          # Nano model - smallest and fastest
+  epochs: 50                  # Quick training
+  imgsz: 640                  # Lower resolution for speed
+  batch: 32                   # Larger batch for speed
+  lr0: 0.01                   # Higher learning rate
+  workers: 4                  # More workers for data loading
+
+# Balanced: Recommended for most use cases
+balanced:
+  model: yolo11s.pt           # Small model - good accuracy/speed trade-off
+  epochs: 100                 # Sufficient for convergence
+  imgsz: 1024                 # Good resolution for small plates
+  batch: 24                   # Moderate batch size
+  lr0: 0.005                  # Balanced learning rate
+  workers: 4
+
+# High Accuracy: Maximum performance (requires GPU)
+high_accuracy:
+  model: yolo11m.pt           # Medium model - best accuracy
+  epochs: 150                 # Extended training
+  imgsz: 1280                 # High resolution
+  batch: 16                   # Smaller batch for stability
+  lr0: 0.001                  # Conservative learning rate
+  workers: 8                  # Maximum workers
+
+# CPU Optimized: For training without GPU
+cpu_optimized:
+  model: yolo11n.pt           # Smallest model for CPU compatibility
+  epochs: 30                  # Limited epochs due to slow training
+  imgsz: 640                  # Lower resolution to manageable size
+  batch: 8                    # Small batch for memory constraints
+  lr0: 0.005                  # Moderate learning rate
+  workers: 2                  # Fewer workers to avoid overhead

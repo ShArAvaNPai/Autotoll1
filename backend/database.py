@@ -30,6 +30,7 @@ class Vehicle(Base):
     id = Column(Integer, primary_key=True, index=True)
     license_plate = Column(String, unique=True, index=True)
     make_model = Column(String)
+    vehicle_type = Column(String, default="Car")  # Car, Motorcycle, Bus, Truck, Van
     owner_id = Column(Integer, ForeignKey("owners.id"))
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
