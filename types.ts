@@ -25,6 +25,11 @@ export interface AnalysisResult {
   balanceStatus?: 'ok' | 'low_balance';
   allowedToPass?: boolean;
   location?: string;
+  ownerInfo?: {
+    name: string;
+    balance: number;
+    isRegistered: boolean;
+  };
 }
 
 export interface TollRecord extends AnalysisResult {

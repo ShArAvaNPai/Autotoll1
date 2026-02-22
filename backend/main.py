@@ -40,7 +40,7 @@ else:
     print("Supabase credentials not found in environment")
 
 # Import Database Models
-from database import SessionLocal, engine, init_db, Owner, Vehicle, Detection, Correction, Transaction
+from database import SessionLocal, engine, init_db, Owner, Vehicle, Detection, Correction, Transaction, Admin
 
 # Initialize DB Tables
 init_db()
@@ -93,9 +93,52 @@ try:
 except Exception as e:
     print(f"Error loading plate model: {e}")
 
+# Seed Admin User
+@app.on_event("startup")
+def seed_admin():
+    db = SessionLocal()
+    try:
+        admin = db.query(Admin).filter(Admin.username == "Admin").first()
+        if not admin:
+            # Default password: Admin@123
+            # SHA256 for simplicity as per requirements (in prod use bcrypt)
+            pwd_hash = hashlib.sha256("Admin@123".encode()).hexdigest()
+            new_admin = Admin(username="Admin", password_hash=pwd_hash)
+            db.add(new_admin)
+            db.commit()
+            print("Seeded default Admin user.")
+    finally:
+        db.close()
+
 @app.get("/")
 def read_root():
     return {"status": "ok", "model": "yolov8n", "database": "active"}
+
+# --- Admin Auth & Management ---
+
+@app.post("/api/admin/login")
+def admin_login(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    pwd_hash = hashlib.sha256(password.encode()).hexdigest()
+    admin = db.query(Admin).filter(Admin.username == username, Admin.password_hash == pwd_hash).first()
+    if not admin:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return {"status": "success", "username": admin.username}
+
+@app.get("/api/admins")
+def get_admins(db: Session = Depends(get_db)):
+    return db.query(Admin.id, Admin.username, Admin.created_at).all()
+
+@app.post("/api/admins")
+def create_admin(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    existing = db.query(Admin).filter(Admin.username == username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    
+    pwd_hash = hashlib.sha256(password.encode()).hexdigest()
+    new_admin = Admin(username=username, password_hash=pwd_hash)
+    db.add(new_admin)
+    db.commit()
+    return {"status": "success", "username": new_admin.username}
 
 # --- Database Endpoints ---
 
@@ -196,6 +239,7 @@ async def update_vehicle(
     license_plate: str = Form(None),
     make_model: str = Form(None),
     vehicle_type: str = Form(None),
+    photo: UploadFile = File(None),
     db: Session = Depends(get_db)
 ):
     vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
@@ -208,6 +252,27 @@ async def update_vehicle(
         owner.name = name
     if contact_info is not None:
         owner.contact_info = contact_info
+    
+    # Handle Photo Update
+    if photo:
+        # Delete old photo if it exists
+        if owner.photo_path:
+            old_filename = os.path.basename(owner.photo_path)
+            old_path = os.path.join(UPLOAD_DIR, old_filename)
+            if os.path.exists(old_path):
+                try:
+                    os.remove(old_path)
+                except Exception as e:
+                    print(f"Error deleting old photo: {e}")
+
+        # Save new photo
+        file_extension = photo.filename.split(".")[-1]
+        filename = f"{uuid.uuid4()}.{file_extension}"
+        file_path = os.path.join(UPLOAD_DIR, filename)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(photo.file, buffer)
+        owner.photo_path = f"/uploads/{filename}"
+
     if license_plate is not None:
         # Check if plate already exists for another vehicle
         existing = db.query(Vehicle).filter(Vehicle.license_plate == license_plate.upper(), Vehicle.id != vehicle_id).first()
@@ -369,33 +434,66 @@ def get_summary(db: Session = Depends(get_db)):
     }
 
 @app.get("/api/analytics")
-def get_analytics(db: Session = Depends(get_db)):
-    # 1. Revenue and Volume by Day (Past 7 Days)
+def get_analytics(
+    start_date: str = None,
+    end_date: str = None,
+    db: Session = Depends(get_db)
+):
+    # Parse dates or set defaults
     today = datetime.datetime.utcnow().date()
-    seven_days_ago = today - datetime.timedelta(days=7)
+    
+    if start_date:
+        start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
+    else:
+        start_dt = today - datetime.timedelta(days=6) # Default last 7 days (including today)
+        
+    if end_date:
+        end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d").date()
+    else:
+        end_dt = today
+
+    # Ensure start <= end
+    if start_dt > end_dt:
+        start_dt, end_dt = end_dt, start_dt
+
+    # 1. Revenue and Volume Trend (Daily)
+    # We want to show every day in the range, filling with 0 if no data
+    
+    # Query data in range
+    # Filter: start_dt <= date <= end_dt
+    # Note: Detection.timestamp is datetime, so we cast to date or compare with day boundaries
+    query_start = datetime.datetime.combine(start_dt, datetime.time.min)
+    query_end = datetime.datetime.combine(end_dt, datetime.time.max)
     
     daily_stats = db.query(
         func.date(Detection.timestamp).label('date'),
         func.sum(Detection.toll_amount).label('revenue'),
         func.count(Detection.id).label('volume')
-    ).filter(Detection.timestamp >= seven_days_ago).group_by(func.date(Detection.timestamp)).all()
+    ).filter(
+        Detection.timestamp >= query_start,
+        Detection.timestamp <= query_end
+    ).group_by(func.date(Detection.timestamp)).all()
     
     revenue_trend = []
-    for d in range(7, -1, -1):
-        day = today - datetime.timedelta(days=d)
-        day_str = day.isoformat()
+    current_dt = start_dt
+    while current_dt <= end_dt:
+        day_str = current_dt.isoformat()
         match = next((item for item in daily_stats if item.date == day_str), None)
         revenue_trend.append({
             "date": day_str,
             "revenue": match.revenue if match else 0,
             "volume": match.volume if match else 0
         })
+        current_dt += datetime.timedelta(days=1)
 
-    # 2. Hourly Traffic (Current Day)
+    # 2. Hourly Traffic (Aggregated for the selected range)
     hourly_stats = db.query(
         func.strftime('%H', Detection.timestamp).label('hour'),
         func.count(Detection.id).label('count')
-    ).filter(func.date(Detection.timestamp) == today.isoformat()).group_by(func.strftime('%H', Detection.timestamp)).all()
+    ).filter(
+        Detection.timestamp >= query_start,
+        Detection.timestamp <= query_end
+    ).group_by(func.strftime('%H', Detection.timestamp)).all()
     
     hourly_traffic = []
     for h in range(24):
@@ -406,30 +504,43 @@ def get_analytics(db: Session = Depends(get_db)):
             "count": match.count if match else 0
         })
 
-    # 3. Vehicle Type Distribution
+    # 3. Vehicle Type Distribution (Aggregated for range)
     type_stats = db.query(
         Detection.vehicle_type,
         func.count(Detection.id).label('count')
+    ).filter(
+        Detection.timestamp >= query_start,
+        Detection.timestamp <= query_end
     ).group_by(Detection.vehicle_type).all()
     
     vehicle_distribution = [
         {"type": t.vehicle_type, "value": t.count} for t in type_stats
     ]
 
-    # 4. Summary Metrics
+    # 4. Summary Metrics (Aggregated for range)
     total_stats = db.query(
         func.sum(Detection.toll_amount).label('total_revenue'),
         func.count(Detection.id).label('total_vehicles')
+    ).filter(
+        Detection.timestamp >= query_start,
+        Detection.timestamp <= query_end
     ).first()
+
+    total_rev = total_stats.total_revenue or 0
+    total_veh = total_stats.total_vehicles or 0
 
     return {
         "revenueTrend": revenue_trend,
         "hourlyTraffic": hourly_traffic,
         "vehicleDistribution": vehicle_distribution,
         "summary": {
-            "totalRevenue": total_stats.total_revenue or 0,
-            "totalVehicles": total_stats.total_vehicles or 0,
-            "avgRevenue": (total_stats.total_revenue / total_stats.total_vehicles) if total_stats.total_vehicles and total_stats.total_vehicles > 0 else 0
+            "totalRevenue": total_rev,
+            "totalVehicles": total_veh,
+            "avgRevenue": (total_rev / total_veh) if total_veh and total_veh > 0 else 0
+        },
+        "period": {
+            "start": start_dt.isoformat(),
+            "end": end_dt.isoformat()
         }
     }
 
@@ -733,6 +844,7 @@ def get_image_hash(image_bytes):
 @app.post("/analyze")
 async def analyze_image(
     location: str = Form("UDUPI"), # Default to UDUPI for backward compat
+    source: str = Form("manual"), # manual or live
     file: UploadFile = File(...), 
     db: Session = Depends(get_db)
 ):
@@ -984,47 +1096,56 @@ async def analyze_image(
         allowed_to_pass = True
 
         # Deduct balance if vehicle is registered
+        # MANUAL APPROVAL CHANGE: Do NOT deduct here. Just check balance status.
         if known_vehicle:
             if known_vehicle.owner.balance < toll_amount:
                 balance_status = 'low_balance'
                 allowed_to_pass = False
-                status = 'pending_payment' # New status for internal tracking, allows frontend to know
+                status = 'pending_payment' 
                 print(f"DEBUG: Low balance for {known_vehicle.owner.name}. Balance: {known_vehicle.owner.balance}, Required: {toll_amount}")
             else:
-                known_vehicle.owner.balance -= toll_amount
-                print(f"DEBUG: Deducted {toll_amount} from owner {known_vehicle.owner.name}. New balance: {known_vehicle.owner.balance}")
+                # known_vehicle.owner.balance -= toll_amount -- MOVED TO APPROVAL
+                # print(f"DEBUG: Deducted {toll_amount} from owner {known_vehicle.owner.name}. New balance: {known_vehicle.owner.balance}")
                 
-                 # Record TOLL Transaction
-                tx = Transaction(
-                    owner_id=known_vehicle.owner.id,
-                    amount=-toll_amount,
-                    type='TOLL',
-                    description=f"Toll deduction for {license_plate} at {location}",
-                    timestamp=datetime.datetime.utcnow()
-                )
-                db.add(tx)
+                 # Record TOLL Transaction -- MOVED TO APPROVAL
+                # tx = Transaction(
+                #     owner_id=known_vehicle.owner.id,
+                #     amount=-toll_amount,
+                #     type='TOLL',
+                #     description=f"Toll deduction for {license_plate} at {location}",
+                #     timestamp=datetime.datetime.utcnow()
+                # )
+                # db.add(tx)
+                pass
+
+        # Always set status to pending_approval for manual flow
+        status = 'pending_approval'
 
         
         print(f"DEBUG: Analyzed {license_plate} (Conf: {confidence}). Status: {status}")
 
-        new_detection = Detection(
-            vehicle_type=vehicle_type,
-            license_plate=license_plate,
-            confidence=f"{confidence:.2f}",
-            timestamp=datetime.datetime.utcnow(),
-            known_vehicle_id=known_vehicle.id if known_vehicle else None,
-            is_authorized=is_authorized,
-            toll_amount=toll_amount,
-            status=status,
-            image_path=db_image_path,
-            location=location
-        )
-        db.add(new_detection)
-        db.commit()
+        # LIVE MODE LOGIC: If source is 'live' and no plate detected, DO NOT SAVE to DB
+        new_detection = None
+        if not (source == 'live' and license_plate == 'UNKNOWN'):
+            new_detection = Detection(
+                vehicle_type=vehicle_type,
+                license_plate=license_plate,
+                confidence=f"{confidence:.2f}",
+                timestamp=datetime.datetime.utcnow(),
+                known_vehicle_id=known_vehicle.id if known_vehicle else None,
+                is_authorized=is_authorized,
+                toll_amount=toll_amount,
+                status=status,
+                image_path=db_image_path,
+                location=location
+            )
+            db.add(new_detection)
+            db.commit()
+            db.refresh(new_detection)
 
         # Build Response
         response_data = {
-            "id": new_detection.id,
+            "id": new_detection.id if new_detection else -1, # -1 indicates transient result
             "vehicleType": vehicle_type,
             "licensePlate": license_plate,
             "confidence": confidence,
@@ -1041,7 +1162,9 @@ async def analyze_image(
             response_data["owner"] = {
                 "name": known_vehicle.owner.name,
                 "info": known_vehicle.owner.contact_info,
-                "photo": known_vehicle.owner.photo_path
+                "photo": known_vehicle.owner.photo_path,
+                "balance": known_vehicle.owner.balance,
+                "isRegistered": True
             }
             response_data["description"] += f" OWNER MATCH: {known_vehicle.owner.name}"
             response_data["makeModel"] = known_vehicle.make_model
@@ -1068,6 +1191,116 @@ async def analyze_image(
             "tollAmount": 0,
             "status": "error"
         }
+
+@app.post("/api/detections/{detection_id}/approve")
+def approve_detection(
+    detection_id: int,
+    payment_method: str = Form(...), # 'account' or 'cash'
+    corrected_plate: str = Form(None),
+    db: Session = Depends(get_db)
+):
+    detection = db.query(Detection).filter(Detection.id == detection_id).first()
+    if not detection:
+        raise HTTPException(status_code=404, detail="Detection not found")
+
+    # Update plate if corrected
+    if corrected_plate and corrected_plate != detection.license_plate:
+        detection.license_plate = corrected_plate
+        # Re-check vehicle mapping
+        vehicle = db.query(Vehicle).filter(Vehicle.license_plate == corrected_plate).first()
+        if vehicle:
+            detection.known_vehicle_id = vehicle.id
+            detection.is_authorized = 1
+        else:
+            detection.known_vehicle_id = None
+            detection.is_authorized = 0
+            
+    vehicle = db.query(Vehicle).filter(Vehicle.id == detection.known_vehicle_id).first() if detection.known_vehicle_id else None
+    toll_amount = detection.toll_amount
+
+    if payment_method == 'account':
+        if not vehicle:
+            raise HTTPException(status_code=400, detail="Vehicle not registered, cannot deduct from account")
+        
+        if vehicle.owner.balance < toll_amount:
+            raise HTTPException(status_code=400, detail="Insufficient balance")
+
+        vehicle.owner.balance -= toll_amount
+        
+        # Record Transaction
+        tx = Transaction(
+            owner_id=vehicle.owner.id,
+            amount=-toll_amount,
+            type='TOLL',
+            description=f"Toll deduction for {detection.license_plate} at {detection.location}",
+            timestamp=datetime.datetime.utcnow()
+        )
+        db.add(tx)
+        detection.status = 'verified'
+        
+    elif payment_method == 'cash':
+        # Just mark as verified/collected
+        detection.status = 'verified'
+        # Log cash collection if needed
+        pass
+
+    db.commit()
+    return {"status": "success", "new_balance": vehicle.owner.balance if vehicle and payment_method == 'account' else None}
+
+@app.post("/api/detections/{detection_id}/approve")
+def approve_detection(
+    detection_id: int,
+    payment_method: str = Form(...), # 'account' or 'cash'
+    corrected_plate: str = Form(None),
+    db: Session = Depends(get_db)
+):
+    detection = db.query(Detection).filter(Detection.id == detection_id).first()
+    if not detection:
+        raise HTTPException(status_code=404, detail="Detection not found")
+
+    # Update plate if corrected
+    if corrected_plate and corrected_plate != detection.license_plate:
+        detection.license_plate = corrected_plate
+        # Re-check vehicle mapping
+        vehicle = db.query(Vehicle).filter(Vehicle.license_plate == corrected_plate).first()
+        if vehicle:
+            detection.known_vehicle_id = vehicle.id
+            detection.is_authorized = 1
+        else:
+            detection.known_vehicle_id = None
+            detection.is_authorized = 0
+            
+    vehicle = db.query(Vehicle).filter(Vehicle.id == detection.known_vehicle_id).first() if detection.known_vehicle_id else None
+    toll_amount = detection.toll_amount
+
+    if payment_method == 'account':
+        if not vehicle:
+            raise HTTPException(status_code=400, detail="Vehicle not registered, cannot deduct from account")
+        
+        if vehicle.owner.balance < toll_amount:
+            raise HTTPException(status_code=400, detail="Insufficient balance")
+
+        vehicle.owner.balance -= toll_amount
+        
+        # Record Transaction
+        tx = Transaction(
+            owner_id=vehicle.owner.id,
+            amount=-toll_amount,
+            type='TOLL',
+            description=f"Toll deduction for {detection.license_plate} at {detection.location}",
+            timestamp=datetime.datetime.utcnow()
+        )
+        db.add(tx)
+        detection.status = 'verified'
+        
+    elif payment_method == 'cash':
+        # Just mark as verified/collected
+        detection.status = 'verified'
+        # Log cash collection if needed
+        pass
+
+    db.commit()
+    return {"status": "success", "new_balance": vehicle.owner.balance if vehicle and payment_method == 'account' else None}
 
 @app.post("/api/correct")
 def submit_correction(

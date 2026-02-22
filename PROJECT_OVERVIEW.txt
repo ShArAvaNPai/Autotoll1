@@ -1,0 +1,73 @@
+# AutoToll AI - Project Overview
+
+## 1. Project Objective
+AutoToll AI is a smart automated toll collection system designed to streamline traffic flow and eliminate manual intervention at toll plazas. It uses AI and computer vision to detect vehicles, recognize license plates, and automatically deduct toll fees from a digital wallet.
+
+## 2. Technology Stack
+
+### Frontend (User Interface)
+- **Framework**: React.js 19 (Vite)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **Icons**: Lucide React
+- **Charts**: Recharts
+- **State/Auth**: Supabase Client
+- **AI Integration**: Google Generative AI (Gemini)
+
+### Backend (Server Logic)
+- **Framework**: Python FastAPI
+- **Web Server**: Uvicorn
+- **Database ORM**: SQLAlchemy
+- **Data Handling**: Pandas & Openpyxl (Excel/CSV support)
+- **Security**: SHA256 hashing for admin passwords
+
+### Artificial Intelligence & Computer Vision
+- **Vehicle Detection**: YOLOv8 (Ultralytics)
+- **ALPR Module**: Fast-ALPR (Fastest-Plate-OCR)
+  - **Detector**: YOLOv9-tiny (640px)
+  - **OCR**: Global Plates MobileViT v2
+- **Image Processing**: OpenCV & Pillow
+
+### Database & Storage
+- **Local Database**: SQLite (Fast local storage for edges)
+- **Cloud Synchronization**: Supabase (PostgreSQL)
+- **Media Storage**: Local `uploads/` directory for vehicle/detection images
+
+## 3. Key Features
+- **Live Monitor**: Real-time video/image scanning for license plates.
+- **Automated Toll Deduction**: Immediate balance deduction for registered vehicles.
+- **Registry Management**: CRUD operations for owners and vehicles.
+- **Financial Analytics**: Dashboard showing daily revenue, volume trends, and vehicle distribution.
+- **Wallet System**: Digital top-ups, transaction logging, and low-balance alerts.
+- **Review Queue**: Manual verification for low-confidence AI detections.
+- **Voice Announcements**: Text-to-Speech (TTS) integration for audible plate recognition.
+- **Data Management**: Bulk import/export from CSV and Excel files.
+
+## 4. Model Training Process
+
+### Dataset Preparation
+1. **Gather Images**: Collect photos of local vehicles and license plates.
+2. **Annotation**: Use tools like Roboflow or CVAT to draw bounding boxes.
+3. **Export**: Use the YOLOv8 format (images, labels, and `data.yaml`).
+
+### Training Workflow
+1. **Configuration**: Set up `data.yaml` with correct paths to the training and validation sets.
+2. **Execution**: Run the training script:
+   `python3 backend/train.py --data /path/to/dataset/data.yaml --epochs 50`
+3. **Optimization**: The script generates a `best.pt` file containing the trained weights.
+
+### Deployment
+1. Move the `best.pt` file to the `backend/weights/` or a custom directory.
+2. Update the model path in `backend/main.py` (line 77 or specialized detection sections).
+3. Restart the FastAPI server to apply the new model.
+
+## 5. System Workflow
+1. Vehicle enters toll area -> Camera captures image.
+2. AI detects vehicle and crops license plate area.
+3. OCR extracts alphanumeric text from the plate.
+4. Backend checks if the plate exists in the database.
+   - **Registered**: Checks wallet balance.
+     - *Sufficient*: Deducts toll, logs transaction, opens barrier.
+     - *Insufficient*: Signals alert, requests manual payment/cash.
+   - **Unregistered**: Prompts for registration or cash collection.
+5. All data is logged for reporting and synced to the cloud.

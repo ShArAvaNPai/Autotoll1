@@ -12,11 +12,13 @@ export function LoginView({ onLogin }: LoginViewProps) {
     const [error, setError] = useState('');
     const [hoveredCard, setHoveredCard] = useState<'admin' | 'owner' | null>(null);
 
-    const handleAdminLogin = (e: React.FormEvent) => {
+    const handleAdminLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (username === 'Admin' && password === 'Admin@123') {
+        try {
+            const { loginAdmin } = await import('../services/api');
+            await loginAdmin(username, password);
             onLogin('admin');
-        } else {
+        } catch (err) {
             setError('Invalid credentials');
         }
     };

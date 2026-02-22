@@ -14,11 +14,11 @@ export const DashboardMenu: React.FC<DashboardMenuProps> = ({ onNavigate, stats 
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
     const menuItems = [
+
         { id: 'monitor', title: 'Live Monitor', icon: ScanLine, color: 'text-blue-400', glow: 'shadow-blue-500/50' },
         { id: 'analytics', title: 'Analytics', icon: Activity, color: 'text-purple-400', glow: 'shadow-purple-500/50' },
         { id: 'registry', title: 'Registry', icon: User, color: 'text-emerald-400', glow: 'shadow-emerald-500/50' },
         { id: 'funds', title: 'Funds', icon: Wallet, color: 'text-green-400', glow: 'shadow-green-500/50' },
-        { id: 'reports', title: 'Reports', icon: TrendingUp, color: 'text-pink-400', glow: 'shadow-pink-500/50' },
         { id: 'history', title: 'History', icon: Clock, color: 'text-indigo-400', glow: 'shadow-indigo-500/50' },
         { id: 'review', title: 'Review', icon: FileCheck, color: 'text-amber-400', glow: 'shadow-amber-500/50' },
         { id: 'realtime', title: 'Realtime', icon: Car, color: 'text-cyan-400', glow: 'shadow-cyan-500/50' },

@@ -52,7 +52,7 @@ export default function App() {
 
   const fetchHistory = async () => {
     try {
-      const res = await fetch(`${getBackendUrl()}/api/history`);
+      const res = await fetch(`${getBackendUrl()}/api/history?location=${selectedLocation}`);
       if (res.ok) {
         const data = await res.json();
         const mappedRecords: TollRecord[] = data.map((d: any) => {
@@ -97,7 +97,7 @@ export default function App() {
       fetchSummary();
     }, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedLocation]);
 
   const handleRegisterFromHistory = (plate: string) => {
     setRegistryInitialPlate(plate);
@@ -270,7 +270,7 @@ export default function App() {
           ) : currentView === 'funds' ? (
             <FundsView />
           ) : currentView === 'realtime' ? (
-            <RealtimeDetectionView />
+            <RealtimeDetectionView selectedLocation={selectedLocation} />
           ) : currentView === 'review' ? (
             <ReviewQueue onProcessed={() => {
               fetchHistory();

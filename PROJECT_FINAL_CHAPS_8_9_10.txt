@@ -1,0 +1,42 @@
+Chapter 8: Screenshots (Pages 26-28)
+
+8.1 Admin Dashboard & Live Monitor
+The Admin Dashboard serves as the central hub for toll operators. It features a real-time monitor stream on the left and a summary of recent detections on the right. Key metrics like 'Total Detections', 'Revenue Collected', and 'Pending Reviews' are prominently displayed at the top in a KPI ribbon.
+[Placeholder: Insert screenshot showing the main dashboard with the camera feed and summary cards.]
+
+8.2 Licensed Plate Recognition Results
+Once a vehicle is detected, the system displays a "Detection Overlay". This screenshot shows the YOLO boundary box around the vehicle and the zoomed-in crop of the license plate. Beside the image, the recognized alphanumeric text and the associated confidence score are visible.
+[Placeholder: Insert screenshot of a successful plate detection showing the KA01... format match.]
+
+8.3 Vehicle Owner Wallet & History
+The Vehicle Owner Portal allows users to check their account. This view displays the vehicle details (Make/Model/Plate), current wallet balance, and a table showing the historical travel log with timestamps and deducted toll amounts for each passage.
+[Placeholder: Insert screenshot of the Owner Portal showing a transaction history table.]
+
+8.4 Analytics & Reporting View
+This section shows the data visualization capabilities of the system. It contains bar charts for daily traffic volume and pie charts representing the distribution of vehicle types (Cars vs. Heavy Vehicles). It also illustrates the "Review Queue" where administrators can manually verify low-confidence reads.
+[Placeholder: Insert screenshot of the analytics charts and the manual review interface.]
+
+---
+
+Chapter 9: Conclusion and Future Enhancement (Pages 29-30)
+
+9.1 Conclusion
+The AutoToll AI system successfully demonstrates the feasibility of a low-cost, high-efficiency automated toll collection solution. By integrating YOLOv8 for detection and EasyOCR for text recognition, the system achieves a balance between accuracy and computational speed. The hybrid architecture, utilizing both local SQLite caching and cloud-based Supabase synchronization, ensures that the system is both fast for real-time operations and reliable for long-term data storage. The implementation of a digital wallet system directly addresses the objective of reducing congestion at toll plazas by eliminating the need for physical cash handling.
+
+9.2 Future Enhancement
+- Edge Computing Optimization: Transitioning the AI inference logic to specialized hardware like NVIDIA Jetson or dedicated TPUs to support higher frame rates and 4K camera streams.
+- OCR Precision: Fine-tuning a custom OCR model specifically on Indian license plate fonts (HSRP) to reduce the 6/S and 0/O confusion even further without relying on RegEx post-processing.
+- Mobile App Integration: Developing a cross-platform mobile application (Flutter/React Native) for vehicle owners to receive instant push notifications and perform UPI-based wallet top-ups.
+- Multi-Lane Scaling: Expanding the backend concurrency model to handle tens of lanes simultaneously using a distributed message queue (RabbitMQ/Kafka).
+
+---
+
+Chapter 10: Bibliography (Pages 31-32)
+
+1. Redmon, J., & Farhadi, A. (2018). YOLOv3: An Incremental Improvement. arXiv preprint arXiv:1804.02767. (Foundation for the YOLOv8 architecture used in this project).
+2. Jaided AI. (2020). EasyOCR: Ready-to-use OCR with 80+ supported languages and all popular writing scripts including Latin, Chinese, Arabic, Devanagari, etc. GitHub Repository.
+3. Tiangolo, S. (2018). FastAPI: Modern, high-performance, easy to learn, fast to code, ready for production. Python Framework Documentation.
+4. Meta Platforms. (2024). React Documentation: A JavaScript library for building user interfaces.
+5. Supabase. (2024). PostgREST & Database Management: The Open Source Firebase Alternative.
+6. Indian Ministry of Road Transport and Highways. (2023). Unified Toll Collection Standards for FastTag and RFID integration in India.
+7. Gonzalez, R. C., & Woods, R. E. (2018). Digital Image Processing (4th Ed.). Pearson. (Concepts for image thresholding and noise reduction implemented via OpenCV).

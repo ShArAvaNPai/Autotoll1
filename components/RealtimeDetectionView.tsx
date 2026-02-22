@@ -4,7 +4,11 @@ import { analyzeVehicleImageLocal } from '../services/api';
 import { AnalysisResult, VehicleType } from '../types';
 import { TOLL_RATES as DEFAULT_RATES } from '../constants';
 
-export function RealtimeDetectionView() {
+interface RealtimeDetectionViewProps {
+    selectedLocation: string;
+}
+
+export function RealtimeDetectionView({ selectedLocation }: RealtimeDetectionViewProps) {
     // Add scanner animation style
     useEffect(() => {
         const style = document.createElement('style');
@@ -83,7 +87,7 @@ export function RealtimeDetectionView() {
                     if (blob) {
                         const file = new File([blob], "realtime_frame.jpg", { type: "image/jpeg" });
                         try {
-                            const result = await analyzeVehicleImageLocal(file);
+                            const result = await analyzeVehicleImageLocal(file, selectedLocation, 'live');
                             // We still use the 'color' field if available, but don't show it 
                             // heavily or require the HUD to display it.
                             if (result.licensePlate !== "UNKNOWN" && result.confidence > 0.4) {

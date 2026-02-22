@@ -1,32 +1,735 @@
-Chapter 6: Coding (Pages 16-21)
+6.4 Source Code (Backend: main.py)
+```python
+from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from fastapi.staticfiles import StaticFiles
+import uvicorn
+from ultralytics import YOLO
+from fast_alpr import ALPR
+import cv2
+import numpy as np
+from PIL import Image
+import io
+import os
+import shutil
+import uuid
+import datetime
+from sqlalchemy import func, Float
+import sqlalchemy
+import pandas as pd
+import re
+import hashlib
+from dotenv import load_dotenv
+from supabase import create_client, Client
 
-6.1 Introduction
-The coding phase involved translating the system design into a functional software application using modern web and AI technologies. The development followed an agile methodology, where components were built incrementally and integrated into the main pipeline. The focus was on readability, maintainability, and performance optimization for real-time AI inference.
+# Load environment variables
+load_dotenv()
 
-6.2 Programing Practices
+# Initialize Supabase
+supabase_url = os.environ.get("SUPABASE_URL")
+supabase_key = os.environ.get("SUPABASE_KEY")
+supabase: Client | None = None
 
-    6.2.1 Top-down & Bottom-up Approaches
-    - **Top-Down Approach**: Used for the UI design, where the overall layout (Dashboard, Sidebars, Navigation) was established first, and individual widgets (Charts, Camera Views) were implemented later.
-    - **Bottom-Up Approach**: Applied to the AI and Database layer. The foundational OCR and YOLO scripts were developed and tested as standalone utilities before being integrated into the FastAPI backend and finally connected to the frontend.
+if supabase_url and supabase_key:
+    try:
+        supabase = create_client(supabase_url, supabase_key)
+        print("Supabase client initialized")
+    except Exception as e:
+        print(f"Failed to initialize Supabase: {e}")
+else:
+    print("Supabase credentials not found in environment")
 
-    6.2.2 Structured Programming
-    The project adheres to structured programming principles:
-    - **Modularity**: Code is split into reusable components (React components) and specialized backend services (database.py, main.py).
-    - **Type Safety**: TypeScript is used in the frontend to prevent runtime errors and ensure consistent data structures across the application.
-    - **Asynchronous Execution**: Python's `async/await` is utilized in FastAPI to handle high-concurrency requests and non-blocking AI processing.
+# Import Database Models
+from database import SessionLocal, engine, init_db, Owner, Vehicle, Detection, Correction, Transaction
 
-6.3 Verification
-Verification was performed through "Static Analysis" and "Peer Review" (simulated). Continuous linting (ESLint for TS, Flake8 for Python) was used to ensure the code follows industry standards. Logic verification was conducted by comparing AI detection outputs against manually labeled ground truth data.
+# Initialize DB Tables
+init_db()
 
-6.4 Source Code (Reference)
-The core application consists of the following primary source files:
-- `App.tsx`: Main entry point for the frontend, managing routing and global state.
-- `main.py`: The heart of the backend, containing API endpoints for AI analysis and registry management.
-- `database.py`: Handles all SQL operations and database connections.
-- `ScannerView.tsx`: The primary interface for live vehicle detection and camera interfacing.
-- `HistoryTable.tsx`: Manages the display and filtering of transaction logs.
+app = FastAPI()
 
--
+# Enable CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Ensure uploads directory exists
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+
+# Mount uploads directory to serve images
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+# Dependency to get DB session
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Load Models
+model = YOLO('yolov8n.pt') 
+alpr = ALPR(
+    detector_model="yolo-v9-t-640-license-plate-end2end", 
+    ocr_model="global-plates-mobile-vit-v2-model"
+)
+
+# Load Specialized Plate Model (if available)
+plate_model = None
+try:
+    if os.path.exists('specialized_plate_detector.pt'):
+        plate_model = YOLO('specialized_plate_detector.pt')
+        print("Loaded specialized plate detection model.")
+    else:
+        print("Warning: specialized_plate_detector.pt not found. Using fallback detection.")
+except Exception as e:
+    print(f"Error loading plate model: {e}")
+
+@app.get("/")
+def read_root():
+    return {"status": "ok", "model": "yolov8n", "database": "active"}
+
+# --- Database Endpoints ---
+
+@app.post("/api/owners")
+async def create_owner(
+    name: str = Form(...),
+    contact_info: str = Form(...),
+    photo: UploadFile = File(None),
+    db: Session = Depends(get_db)
+):
+    photo_path = ""
+    if photo:
+        file_extension = photo.filename.split(".")[-1]
+        filename = f"{uuid.uuid4()}.{file_extension}"
+        file_path = os.path.join(UPLOAD_DIR, filename)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(photo.file, buffer)
+        photo_path = f"/uploads/{filename}"
+
+    new_owner = Owner(name=name, contact_info=contact_info, photo_path=photo_path)
+    db.add(new_owner)
+    db.commit()
+    db.refresh(new_owner)
+
+    if supabase:
+        try:
+            supabase.table("owners").insert({
+                "name": new_owner.name,
+                "contact_info": new_owner.contact_info,
+                "photo_path": new_owner.photo_path
+            }).execute()
+        except Exception as e:
+            print(f"Supabase Sync Error (Owner): {e}")
+
+    return new_owner
+
+@app.get("/api/owners")
+def get_owners(db: Session = Depends(get_db)):
+    return db.query(Owner).all()
+
+@app.post("/api/vehicles")
+def create_vehicle(
+    license_plate: str,
+    make_model: str,
+    owner_id: int,
+    db: Session = Depends(get_db)
+):
+    owner = db.query(Owner).filter(Owner.id == owner_id).first()
+    if not owner:
+        raise HTTPException(status_code=404, detail="Owner not found")
+
+    new_vehicle = Vehicle(license_plate=license_plate.upper(), make_model=make_model, owner_id=owner_id)
+    try:
+        db.add(new_vehicle)
+        db.commit()
+        db.refresh(new_vehicle)
+        
+        if supabase:
+            try:
+                sb_owner_res = supabase.table("owners").select("id").eq("contact_info", owner.contact_info).execute()
+                sb_owner_id = sb_owner_res.data[0]['id'] if sb_owner_res.data else None
+                
+                if sb_owner_id:
+                     supabase.table("vehicles").insert({
+                        "license_plate": new_vehicle.license_plate,
+                        "make_model": new_vehicle.make_model,
+                        "owner_id": sb_owner_id
+                    }).execute()
+            except Exception as e:
+                print(f"Supabase Sync Error (Vehicle): {e}")
+
+        return new_vehicle
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Vehicle with this plate likely already exists")
+
+@app.get("/api/vehicles")
+def get_vehicles(db: Session = Depends(get_db)):
+    return db.query(Vehicle).all()
+
+@app.put("/api/vehicles/{vehicle_id}")
+async def update_vehicle(
+    vehicle_id: int,
+    name: str = Form(None),
+    contact_info: str = Form(None),
+    license_plate: str = Form(None),
+    make_model: str = Form(None),
+    vehicle_type: str = Form(None),
+    db: Session = Depends(get_db)
+):
+    vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    
+    owner = vehicle.owner
+    
+    if name is not None:
+        owner.name = name
+    if contact_info is not None:
+        owner.contact_info = contact_info
+    if license_plate is not None:
+        existing = db.query(Vehicle).filter(Vehicle.license_plate == license_plate.upper(), Vehicle.id != vehicle_id).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="License plate already registered to another vehicle")
+        vehicle.license_plate = license_plate.upper()
+    if make_model is not None:
+        vehicle.make_model = make_model
+    if vehicle_type is not None:
+        vehicle.vehicle_type = vehicle_type
+        
+    db.commit()
+    db.refresh(vehicle)
+    db.refresh(owner)
+    
+    return {"status": "success", "owner": owner, "vehicle": vehicle}
+
+@app.delete("/api/vehicles/{vehicle_id}")
+def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
+    vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    
+    owner = vehicle.owner
+    if owner.photo_path:
+        filename = os.path.basename(owner.photo_path)
+        full_path = os.path.join(UPLOAD_DIR, filename)
+        if os.path.exists(full_path):
+            try:
+                os.remove(full_path)
+            except Exception as e:
+                print(f"Error deleting file: {e}")
+
+    db.delete(vehicle)
+    db.delete(owner)
+    db.commit()
+    return {"status": "success"}
+
+@app.get("/api/vehicles/{vehicle_id}/history")
+def get_vehicle_history(vehicle_id: int, db: Session = Depends(get_db)):
+    vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+        
+    return db.query(Detection).filter(
+        (Detection.known_vehicle_id == vehicle_id) | 
+        (Detection.license_plate == vehicle.license_plate)
+    ).order_by(Detection.timestamp.desc()).all()
+
+@app.post("/api/register")
+async def register_full(
+    name: str = Form(...),
+    contact_info: str = Form(...),
+    license_plate: str = Form(...),
+    make_model: str = Form(...),
+    vehicle_type: str = Form("Car"),
+    photo: UploadFile = File(None),
+    db: Session = Depends(get_db)
+):
+    photo_path = ""
+    if photo:
+        file_extension = photo.filename.split(".")[-1]
+        filename = f"{uuid.uuid4()}.{file_extension}"
+        file_path = os.path.join(UPLOAD_DIR, filename)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(photo.file, buffer)
+        photo_path = f"/uploads/{filename}"
+
+    try:
+        new_owner = Owner(name=name, contact_info=contact_info, photo_path=photo_path)
+        db.add(new_owner)
+        db.flush() 
+
+        existing_vehicle = db.query(Vehicle).filter(Vehicle.license_plate == license_plate.upper()).first()
+        if existing_vehicle:
+            db.rollback()
+            raise HTTPException(status_code=400, detail="License plate already registered")
+
+        new_vehicle = Vehicle(
+            license_plate=license_plate.upper(), 
+            make_model=make_model,
+            vehicle_type=vehicle_type,
+            owner_id=new_owner.id
+        )
+        db.add(new_vehicle)
+        db.commit()
+        db.refresh(new_owner)
+        
+        if supabase:
+            try:
+                owner_res = supabase.table("owners").insert({
+                    "name": new_owner.name,
+                    "contact_info": new_owner.contact_info,
+                    "photo_path": new_owner.photo_path
+                }).execute()
+                
+                sb_owner_id = owner_res.data[0]['id'] if owner_res.data else None
+                
+                if sb_owner_id:
+                     supabase.table("vehicles").insert({
+                        "license_plate": new_vehicle.license_plate,
+                        "make_model": new_vehicle.make_model,
+                        "owner_id": sb_owner_id
+                    }).execute()
+            except Exception as e:
+                print(f"Supabase Sync Error (Register Full): {e}")
+        
+        return {"status": "success", "owner": new_owner, "vehicle": new_vehicle}
+
+    except Exception as e:
+        db.rollback()
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/history")
+def get_history(location: str = None, db: Session = Depends(get_db)):
+    query = db.query(Detection)
+    if location and location != 'ALL':
+        query = query.filter(Detection.location == location)
+    return query.order_by(Detection.timestamp.desc()).limit(50).all()
+
+@app.get("/api/summary")
+def get_summary(db: Session = Depends(get_db)):
+    total_vehicles = db.query(func.count(Detection.id)).scalar() or 0
+    total_revenue = db.query(func.sum(Detection.toll_amount)).scalar() or 0
+    avg_confidence = db.query(func.avg(Detection.confidence.cast(Float))).scalar() or 0
+    pending_review = db.query(func.count(Detection.id)).filter(Detection.status == 'pending_review').scalar() or 0
+    
+    return {
+        "total_vehicles": total_vehicles,
+        "total_revenue": float(total_revenue),
+        "avg_confidence": round(float(avg_confidence) * 100, 1),
+        "pending_review": pending_review
+    }
+
+@app.get("/api/analytics")
+def get_analytics(db: Session = Depends(get_db)):
+    today = datetime.datetime.utcnow().date()
+    seven_days_ago = today - datetime.timedelta(days=7)
+    
+    daily_stats = db.query(
+        func.date(Detection.timestamp).label('date'),
+        func.sum(Detection.toll_amount).label('revenue'),
+        func.count(Detection.id).label('volume')
+    ).filter(Detection.timestamp >= seven_days_ago).group_by(func.date(Detection.timestamp)).all()
+    
+    revenue_trend = []
+    for d in range(7, -1, -1):
+        day = today - datetime.timedelta(days=d)
+        day_str = day.isoformat()
+        match = next((item for item in daily_stats if item.date == day_str), None)
+        revenue_trend.append({
+            "date": day_str,
+            "revenue": match.revenue if match else 0,
+            "volume": match.volume if match else 0
+        })
+
+    hourly_stats = db.query(
+        func.strftime('%H', Detection.timestamp).label('hour'),
+        func.count(Detection.id).label('count')
+    ).filter(func.date(Detection.timestamp) == today.isoformat()).group_by(func.strftime('%H', Detection.timestamp)).all()
+    
+    hourly_traffic = []
+    for h in range(24):
+        hour_str = f"{h:02d}"
+        match = next((item for item in hourly_stats if item.hour == hour_str), None)
+        hourly_traffic.append({
+            "hour": f"{hour_str}:00",
+            "count": match.count if match else 0
+        })
+
+    type_stats = db.query(
+        Detection.vehicle_type,
+        func.count(Detection.id).label('count')
+    ).group_by(Detection.vehicle_type).all()
+    
+    vehicle_distribution = [{"type": t.vehicle_type, "value": t.count} for t in type_stats]
+
+    total_stats = db.query(
+        func.sum(Detection.toll_amount).label('total_revenue'),
+        func.count(Detection.id).label('total_vehicles')
+    ).first()
+
+    return {
+        "revenueTrend": revenue_trend,
+        "hourlyTraffic": hourly_traffic,
+        "vehicleDistribution": vehicle_distribution,
+        "summary": {
+            "totalRevenue": total_stats.total_revenue or 0,
+            "totalVehicles": total_stats.total_vehicles or 0,
+            "avgRevenue": (total_stats.total_revenue / total_stats.total_vehicles) if total_stats.total_vehicles and total_stats.total_vehicles > 0 else 0
+        }
+    }
+
+@app.get("/api/review_queue")
+def get_review_queue(db: Session = Depends(get_db)):
+    return db.query(Detection).filter(Detection.status == 'pending_review').order_by(Detection.timestamp.desc()).all()
+
+@app.put("/api/detections/{detection_id}")
+def update_detection(
+    detection_id: int,
+    vehicle_type: str = Form(...),
+    toll_amount: int = Form(...),
+    db: Session = Depends(get_db)
+):
+    detection = db.query(Detection).filter(Detection.id == detection_id).first()
+    if not detection:
+        raise HTTPException(status_code=404, detail="Detection not found")
+    
+    detection.vehicle_type = vehicle_type
+    detection.toll_amount = toll_amount
+    detection.status = 'verified'
+    
+    db.commit()
+    db.refresh(detection)
+    return detection
+
+@app.delete("/api/detections/{detection_id}")
+def delete_detection(detection_id: int, db: Session = Depends(get_db)):
+    detection = db.query(Detection).filter(Detection.id == detection_id).first()
+    if not detection:
+        raise HTTPException(status_code=404, detail="Detection not found")
+    
+    if detection.image_path:
+        filename = os.path.basename(detection.image_path)
+        full_path = os.path.join(UPLOAD_DIR, filename)
+        if os.path.exists(full_path):
+            try:
+                os.remove(full_path)
+            except Exception as e:
+                print(f"Error deleting file: {e}")
+
+    db.delete(detection)
+    db.commit()
+    return {"status": "success"}
+
+@app.get("/api/vehicle/status/{license_plate}")
+def get_vehicle_status(license_plate: str, db: Session = Depends(get_db)):
+    vehicle = db.query(Vehicle).filter(Vehicle.license_plate == license_plate.upper()).first()
+    detections = db.query(Detection).filter(
+        (Detection.license_plate == license_plate.upper()) |
+        (Detection.known_vehicle_id == (vehicle.id if vehicle else -1))
+    ).order_by(Detection.timestamp.desc()).all()
+
+    total_due = sum(d.toll_amount for d in detections)
+    
+    vehicle_data = None
+    if vehicle:
+        vehicle_data = {
+            "id": vehicle.id,
+            "license_plate": vehicle.license_plate,
+            "make_model": vehicle.make_model,
+            "owner_id": vehicle.owner_id,
+            "created_at": vehicle.created_at.isoformat() if vehicle.created_at else None
+        }
+    
+    owner_data = None
+    if vehicle and vehicle.owner:
+        owner_data = {
+            "id": vehicle.owner.id,
+            "name": vehicle.owner.name,
+            "contact_info": vehicle.owner.contact_info,
+            "photo_path": vehicle.owner.photo_path,
+            "balance": vehicle.owner.balance,
+            "created_at": vehicle.owner.created_at.isoformat() if vehicle.owner.created_at else None
+        }
+    
+    history_data = []
+    for d in detections:
+        history_data.append({
+            "id": d.id,
+            "vehicle_type": d.vehicle_type,
+            "license_plate": d.license_plate,
+            "confidence": d.confidence,
+            "timestamp": d.timestamp.isoformat() if d.timestamp else None,
+            "toll_amount": d.toll_amount,
+            "status": d.status,
+            "image_path": d.image_path
+        })
+    
+    return {
+        "found": vehicle is not None,
+        "vehicle": vehicle_data,
+        "owner": owner_data,
+        "total_due": total_due,
+        "balance": vehicle.owner.balance if vehicle and vehicle.owner else 0,
+        "history_count": len(detections),
+        "history": history_data
+    }
+
+@app.post("/api/owner/add_balance")
+def add_owner_balance(
+    license_plate: str = Form(...),
+    amount: int = Form(...),
+    description: str = Form("Manual Top-up"),
+    type: str = Form("TOPUP"),
+    db: Session = Depends(get_db)
+):
+    vehicle = db.query(Vehicle).filter(Vehicle.license_plate == license_plate.upper()).first()
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    
+    owner = vehicle.owner
+    owner.balance += amount
+    
+    tx = Transaction(
+        owner_id=owner.id,
+        amount=amount,
+        type=type,
+        description=description,
+        timestamp=datetime.datetime.utcnow()
+    )
+    db.add(tx)
+    db.commit()
+    db.refresh(owner)
+    return {"status": "success", "new_balance": owner.balance}
+
+@app.post("/api/owner/resolve_low_balance")
+def resolve_low_balance(
+    detection_id: int = Form(...),
+    action: str = Form(...), 
+    db: Session = Depends(get_db)
+):
+    detection = db.query(Detection).filter(Detection.id == detection_id).first()
+    if not detection:
+        raise HTTPException(status_code=404, detail="Detection not found")
+    
+    if detection.status == 'verified':
+        return {"status": "success", "message": "Already verified"}
+
+    vehicle = db.query(Vehicle).filter(Vehicle.license_plate == detection.license_plate).first()
+    
+    if action == 'pay_cash':
+        if vehicle:
+            vehicle.owner.balance += detection.toll_amount
+            tx_credit = Transaction(
+                owner_id=vehicle.owner.id,
+                amount=detection.toll_amount,
+                type='CASH_PAYMENT',
+                description=f"Cash payment at Toll Gate for {detection.license_plate}",
+                timestamp=datetime.datetime.utcnow()
+            )
+            db.add(tx_credit)
+
+            vehicle.owner.balance -= detection.toll_amount
+            tx_debit = Transaction(
+                owner_id=vehicle.owner.id,
+                amount=-detection.toll_amount,
+                type='TOLL',
+                description=f"Toll deduction (Cash) for {detection.license_plate}",
+                timestamp=datetime.datetime.utcnow()
+            )
+            db.add(tx_debit)
+        detection.status = 'verified'
+        
+    elif action == 'warning':
+        if vehicle:
+            vehicle.owner.balance -= detection.toll_amount
+        detection.status = 'verified' 
+        detection.confidence += " [WARNING]" 
+        
+    db.commit()
+    return {"status": "success", "action": action}
+
+@app.post("/api/admin/adjust_balance")
+def admin_adjust_balance(
+    owner_id: int = Form(...),
+    amount: int = Form(...), 
+    description: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    owner = db.query(Owner).filter(Owner.id == owner_id).first()
+    if not owner:
+        raise HTTPException(status_code=404, detail="Owner not found")
+    
+    owner.balance += amount
+    
+    tx = Transaction(
+        owner_id=owner.id,
+        amount=amount,
+        type='ADMIN_ADJUST',
+        description=description,
+        timestamp=datetime.datetime.utcnow()
+    )
+    db.add(tx)
+    db.commit()
+    return {"status": "success", "new_balance": owner.balance}
+
+@app.get("/api/owners/{owner_id}/transactions")
+def get_transactions(owner_id: int, db: Session = Depends(get_db)):
+    return db.query(Transaction).filter(Transaction.owner_id == owner_id).order_by(Transaction.timestamp.desc()).all()
+
+@app.post("/api/import")
+async def import_data(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    try:
+        contents = await file.read()
+        df = None
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(contents))
+        elif file.filename.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(io.BytesIO(contents))
+        else:
+            raise HTTPException(status_code=400, detail="Invalid file type.")
+
+        df.columns = [c.strip() for c in df.columns]
+        success_count = 0
+        error_count = 0
+        errors = []
+
+        for index, row in df.iterrows():
+            try:
+                name = str(row['Full Name']).strip()
+                contact = str(row['Contact Info']).strip()
+                plate = str(row['License Plate']).strip().upper()
+                model = str(row['Make & Model']).strip()
+
+                if not name or not plate: continue
+
+                existing_vehicle = db.query(Vehicle).filter(Vehicle.license_plate == plate).first()
+                if existing_vehicle:
+                    error_count += 1
+                    errors.append(f"Row {index+2}: Plate {plate} exists")
+                    continue
+
+                new_owner = Owner(name=name, contact_info=contact, photo_path="")
+                db.add(new_owner)
+                db.flush()
+
+                new_vehicle = Vehicle(license_plate=plate, make_model=model, owner_id=new_owner.id)
+                db.add(new_vehicle)
+                success_count += 1
+            except Exception as e:
+                error_count += 1
+                errors.append(f"Row {index+2}: {str(e)}")
+
+        db.commit()
+        return {"status": "success", "imported": success_count, "failed": error_count, "errors": errors[:10]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/analyze")
+async def analyze_image(
+    location: str = Form("UDUPI"), 
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db)
+):
+    try:
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents)).convert("RGB")
+        img_np = np.array(image)
+        img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+
+        img_hash = hashlib.sha256(contents).hexdigest()
+        existing_correction = db.query(Correction).filter(Correction.image_hash == img_hash).first()
+        
+        results = model(img_cv)
+        vehicle_type, confidence, license_plate, vehicle_color = "Unknown", 0.0, "UNKNOWN", "Unknown"
+        
+        vehicle_classes = [2, 3, 5, 7]
+        coco_map = {2: 'Car', 3: 'Motorcycle', 5: 'Bus', 7: 'Truck'}
+
+        for r in results:
+            for b in r.boxes:
+                cls_id, conf = int(b.cls[0]), float(b.conf[0])
+                if cls_id in vehicle_classes and conf > confidence:
+                    confidence, vehicle_type = conf, coco_map[cls_id]
+                    x1, y1, x2, y2 = map(int, b.xyxy[0].cpu().numpy())
+                    color_crop = img_cv[y1:y2, x1:x2]
+
+        if 'color_crop' in locals() and color_crop.size > 0:
+            # Dominant color logic...
+            vehicle_color = "Silver" # Simplified for brevity
+
+        alpr_results = alpr.predict(img_cv)
+        candidates = []
+        for res in alpr_results:
+            if res.ocr and res.ocr.text:
+                cleaned = ''.join(e for e in res.ocr.text if e.isalnum()).upper()
+                conf = sum(res.ocr.confidence)/len(res.ocr.confidence) if isinstance(res.ocr.confidence, list) else float(res.ocr.confidence)
+                candidates.append({'text': cleaned, 'prob': conf, 'score': 100}) # Simplified score
+
+        if candidates:
+            candidates.sort(key=lambda x: (x['score'], x['prob']), reverse=True)
+            license_plate, confidence = candidates[0]['text'], candidates[0]['prob']
+        
+        if existing_correction:
+            license_plate, confidence, status = existing_correction.corrected_plate, 1.0, 'verified'
+        
+        status = 'verified' if license_plate != "UNKNOWN" and float(confidence) >= 0.5 else 'pending_review'
+        
+        image_filename = f"{uuid.uuid4()}.jpg"
+        image_save_path = os.path.join(UPLOAD_DIR, image_filename)
+        with open(image_save_path, "wb") as f: f.write(contents)
+            
+        known_vehicle = db.query(Vehicle).filter(Vehicle.license_plate == license_plate).first()
+        toll_amount = {'Car': 50, 'Motorcycle': 30, 'Bus': 100, 'Truck': 150}.get(vehicle_type, 50)
+        balance_status, allowed_to_pass = 'ok', True
+
+        if known_vehicle:
+            if known_vehicle.owner.balance < toll_amount:
+                balance_status, allowed_to_pass, status = 'low_balance', False, 'pending_payment'
+            else:
+                known_vehicle.owner.balance -= toll_amount
+                db.add(Transaction(owner_id=known_vehicle.owner.id, amount=-toll_amount, type='TOLL', description=f"Toll deduction", timestamp=datetime.datetime.utcnow()))
+
+        new_detection = Detection(vehicle_type=vehicle_type, license_plate=license_plate, confidence=f"{confidence:.2f}", timestamp=datetime.datetime.utcnow(), known_vehicle_id=known_vehicle.id if known_vehicle else None, is_authorized=1 if known_vehicle else 0, toll_amount=toll_amount, status=status, image_path=f"/uploads/{image_filename}", location=location)
+        db.add(new_detection)
+        db.commit()
+
+        return {"id": new_detection.id, "vehicleType": vehicle_type, "licensePlate": license_plate, "confidence": confidence, "tollAmount": toll_amount, "status": status, "color": vehicle_color, "balanceStatus": balance_status, "allowedToPass": allowed_to_pass}
+
+    except Exception as e:
+        return {"licensePlate": "DETECTION_FAILED", "status": "error", "description": str(e)}
+
+@app.post("/api/correct")
+def submit_correction(detection_id: int = Form(...), corrected_plate: str = Form(...), db: Session = Depends(get_db)):
+    detection = db.query(Detection).filter(Detection.id == detection_id).first()
+    if not detection: raise HTTPException(status_code=404)
+    detection.license_plate = corrected_plate.upper()
+    detection.status = 'verified'
+    db.add(Correction(image_hash=hashlib.sha256(open(os.path.join(UPLOAD_DIR, os.path.basename(detection.image_path)), "rb").read()).hexdigest(), corrected_plate=corrected_plate.upper()))
+    db.commit()
+    return {"status": "success"}
+
+@app.get("/api/reports/monthly")
+def get_monthly_report(month: int = None, year: int = None, location: str = None, db: Session = Depends(get_db)):
+    now = datetime.datetime.utcnow()
+    month, year = month or now.month, year or now.year
+    start_date = datetime.datetime(year, month, 1)
+    end_date = datetime.datetime(year + (1 if month==12 else 0), (1 if month==12 else month+1), 1)
+    detections = db.query(Detection).filter(Detection.timestamp >= start_date, Detection.timestamp < end_date).all()
+    return {"total_revenue": sum(d.toll_amount for d in detections), "total_visitors": len(detections)}
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+```
 
 Chapter 7: Testing (Pages 22-25)
 

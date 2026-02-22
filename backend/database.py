@@ -24,6 +24,14 @@ class Owner(Base):
 
     vehicles = relationship("Vehicle", back_populates="owner")
 
+class Admin(Base):
+    __tablename__ = "admins"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    password_hash = Column(String)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
 class Vehicle(Base):
     __tablename__ = "vehicles"
 

@@ -3,6 +3,7 @@ import { Upload, Camera, X, Check, Loader2, Maximize2, AlertTriangle, ScanLine, 
 import { AnalysisResult, VehicleType } from '../types';
 import { submitCorrection } from '../services/api';
 import { getBackendUrl } from '../services/apiConfig';
+import { ApprovalPanel } from './ApprovalPanel';
 
 interface ScannerViewProps {
   onAnalyze: (file: File) => void;
@@ -274,62 +275,8 @@ export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedIma
       {localResult && !isAnalyzing && (
         <>
           {/* Low Balance Blocking Modal */}
-          {localResult.balanceStatus === 'low_balance' && (
-            <div className="absolute inset-0 z-50 bg-red-900/90 backdrop-blur-md flex flex-col items-center justify-center p-6 animate-in zoom-in-95 duration-300 rounded-2xl text-center">
-              <div className="bg-white p-4 rounded-full mb-6 shadow-2xl animate-bounce">
-                <AlertTriangle size={48} className="text-red-600" />
-              </div>
-              <h2 className="text-4xl font-black text-white mb-2 tracking-tighter uppercase drop-shadow-lg">STOP VEHICLE</h2>
-              <p className="text-red-200 text-lg font-bold mb-8">Insufficient Wallet Balance</p>
+          {/* Legacy Low Balance Modal - Removed in favor of ApprovalPanel logic, but keeping minimal check if needed or just removing entirely relies on status check above */}
 
-              <div className="bg-black/40 p-6 rounded-2xl border border-red-500/30 mb-8 w-full max-w-sm">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-zinc-400 text-sm">Required</span>
-                  <span className="text-white font-bold text-xl">₹{localResult.tollAmount || 50}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-zinc-400 text-sm">Available</span>
-                  <span className="text-red-400 font-bold text-xl">₹{localResult.owner?.balance || 0}</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 w-full max-w-sm gap-4">
-                <button
-                  onClick={async () => {
-                    try {
-                      const formData = new FormData();
-                      formData.append('detection_id', localResult.id?.toString() || "");
-                      formData.append('action', 'pay_cash');
-                      await fetch(`${getBackendUrl()}/api/owner/resolve_low_balance`, { method: 'POST', body: formData });
-                      setLocalResult({ ...localResult, balanceStatus: 'ok', status: 'processed' }); // Update local state to hide modal
-                    } catch (e) {
-                      alert("Error processing");
-                    }
-                  }}
-                  className="w-full py-5 bg-green-500 hover:bg-green-400 text-white font-bold rounded-xl shadow-xl shadow-green-900/40 text-lg transition-all active:scale-95"
-                >
-                  COLLECT CASH & APPROVE
-                </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      const formData = new FormData();
-                      formData.append('detection_id', localResult.id?.toString() || "");
-                      formData.append('action', 'warning');
-                      await fetch(`${getBackendUrl()}/api/owner/resolve_low_balance`, { method: 'POST', body: formData });
-                      setLocalResult({ ...localResult, balanceStatus: 'ok', status: 'processed' });
-                      alert("Warning sent to user.");
-                    } catch (e) {
-                      alert("Error processing");
-                    }
-                  }}
-                  className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold rounded-xl border border-white/5 transition-all"
-                >
-                  Allow with Warning
-                </button>
-              </div>
-            </div>
-          )}
 
           <div className="bg-zinc-900 rounded-xl p-5 border border-zinc-800 shadow-xl animate-in slide-in-from-bottom-4 duration-500 relative overflow-hidden">
 
@@ -421,29 +368,36 @@ export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedIma
               </div>
             )}
 
-            <div className="mt-6 flex gap-3">
-              <button
-                onClick={handleDiscard}
-                disabled={isDiscarding}
-                className="flex-1 py-2.5 bg-zinc-950 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 rounded-lg border border-zinc-800 hover:border-red-500/20 transition-all flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50"
-              >
-                <X size={14} />
-                Discard
-              </button>
-              <button
-                onClick={() => {
+            {/* Approval Panel integration */}
+            {localResult.status === 'pending_approval' ? (
+              <ApprovalPanel
+                result={localResult}
+                onApprove={() => {
+                  setLocalResult(null);
                   setPreview(null);
                   onClear?.();
                 }}
-                className="flex-[2] py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium"
-              >
-                <Check size={14} />
-                Scan Next
-              </button>
-            </div>
+                onCancel={handleDiscard}
+              />
+            ) : (
+              /* Fallback for processed/other statuses or just show success msg */
+              <div className="bg-emerald-900/20 border border-emerald-500/30 p-4 rounded-xl flex flex-col items-center">
+                <Check className="text-emerald-500 mb-2" size={32} />
+                <h3 className="text-emerald-400 font-bold">Processed Successfully</h3>
+                <button
+                  onClick={() => {
+                    setPreview(null);
+                    onClear?.();
+                  }}
+                  className="mt-4 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm"
+                >
+                  Scan Next
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}
     </div>
   );
-};
+}

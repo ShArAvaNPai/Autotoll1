@@ -25,10 +25,24 @@ export const AnalyticsView: React.FC = () => {
     const [data, setData] = useState<AnalyticsData | null>(null);
     const [loading, setLoading] = useState(true);
 
+    // Default to last 7 days
+    const [startDate, setStartDate] = useState(() => {
+        const d = new Date();
+        d.setDate(d.getDate() - 6);
+        return d.toISOString().split('T')[0];
+    });
+    const [endDate, setEndDate] = useState(() => {
+        return new Date().toISOString().split('T')[0];
+    });
+
     const fetchAnalytics = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE}/api/analytics`);
+            const params = new URLSearchParams({
+                start_date: startDate,
+                end_date: endDate
+            });
+            const res = await fetch(`${API_BASE}/api/analytics?${params}`);
             if (res.ok) {
                 const json = await res.json();
                 setData(json);
@@ -44,7 +58,7 @@ export const AnalyticsView: React.FC = () => {
         fetchAnalytics();
         const interval = setInterval(fetchAnalytics, 30000); // Refresh every 30s
         return () => clearInterval(interval);
-    }, []);
+    }, [startDate, endDate]); // Refetch when dates change
 
     const CustomTooltip = ({ active, payload, label, prefix = "" }: any) => {
         if (active && payload && payload.length) {
@@ -72,18 +86,39 @@ export const AnalyticsView: React.FC = () => {
 
     return (
         <div className="p-6 space-y-6 overflow-auto h-full pb-12">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <h2 className="text-2xl font-bold text-zinc-100 flex items-center gap-2">
                     <Activity className="text-blue-500" />
                     System Analytics
                 </h2>
-                <button
-                    onClick={fetchAnalytics}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-sm transition-colors"
-                >
-                    <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-                    Refresh
-                </button>
+
+                <div className="flex items-center gap-3 bg-zinc-900 p-1.5 rounded-xl border border-zinc-800">
+                    <div className="flex items-center gap-2 px-2">
+                        <span className="text-xs text-zinc-500 font-medium uppercase">From</span>
+                        <input
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            className="bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-200 focus:outline-none focus:border-blue-500"
+                        />
+                    </div>
+                    <div className="flex items-center gap-2 px-2 border-l border-zinc-800">
+                        <span className="text-xs text-zinc-500 font-medium uppercase">To</span>
+                        <input
+                            type="date"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            className="bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-200 focus:outline-none focus:border-blue-500"
+                        />
+                    </div>
+                    <button
+                        onClick={fetchAnalytics}
+                        className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors ml-1"
+                        title="Refresh Data"
+                    >
+                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                    </button>
+                </div>
             </div>
 
             {/* Summary Cards */}
@@ -98,7 +133,7 @@ export const AnalyticsView: React.FC = () => {
                     <div className="text-2xl font-bold text-white">₹{data.summary.totalRevenue.toLocaleString()}</div>
                     <div className="text-xs text-emerald-500 mt-1 flex items-center gap-1">
                         <TrendingUp size={12} />
-                        Live tracking active
+                        For selected period
                     </div>
                 </div>
 
@@ -137,7 +172,7 @@ export const AnalyticsView: React.FC = () => {
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="font-semibold text-zinc-100 flex items-center gap-2">
                             <IndianRupee size={18} className="text-emerald-400" />
-                            Revenue Trend (Last 7 Days)
+                            Revenue Trend
                         </h3>
                     </div>
                     <div className="h-[300px] w-full">
@@ -156,7 +191,7 @@ export const AnalyticsView: React.FC = () => {
                                     fontSize={12}
                                     tickFormatter={(str) => {
                                         const date = new Date(str);
-                                        return date.toLocaleDateString(undefined, { weekday: 'short' });
+                                        return date.toLocaleDateString(undefined, { day: '2-digit', month: 'short' });
                                     }}
                                 />
                                 <YAxis stroke="#52525b" fontSize={12} />
@@ -179,7 +214,7 @@ export const AnalyticsView: React.FC = () => {
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="font-semibold text-zinc-100 flex items-center gap-2">
                             <Clock size={18} className="text-blue-400" />
-                            Hourly Traffic Flow (Today)
+                            Hourly Traffic Pattern
                         </h3>
                     </div>
                     <div className="h-[300px] w-full">
@@ -246,7 +281,7 @@ export const AnalyticsView: React.FC = () => {
                             <p className="text-xl font-bold text-white">
                                 {data.hourlyTraffic.reduce((prev, current) => (prev.count > current.count) ? prev : current).count > 0
                                     ? `${data.hourlyTraffic.reduce((prev, current) => (prev.count > current.count) ? prev : current).hour}`
-                                    : "No data today"}
+                                    : "No data"}
                             </p>
                         </div>
                         <div className="p-4 bg-zinc-950 rounded-xl border border-zinc-800">
@@ -259,7 +294,7 @@ export const AnalyticsView: React.FC = () => {
                         </div>
                         <div className="p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/10">
                             <p className="text-emerald-500 text-sm font-medium">System Health</p>
-                            <p className="text-zinc-300 text-sm mt-1">All toll collection points are operational. Real-time sync is enabled.</p>
+                            <p className="text-zinc-300 text-sm mt-1">Analytics reflects data from {startDate} to {endDate}.</p>
                         </div>
                     </div>
                 </div>
