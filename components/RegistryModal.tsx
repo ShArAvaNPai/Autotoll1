@@ -126,9 +126,12 @@ export function RegistryModal({ isOpen, onClose, editItem, onSuccess }: Registry
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm text-zinc-400">Contact (Phone/Email)</label>
+                                    <label className="text-sm text-zinc-400">Contact Number (Indian Only)</label>
                                     <input
                                         required
+                                        type="tel"
+                                        pattern="^(\+91[\-\s]?)?[0]?(91)?[6789]\d{9}$"
+                                        title="Please enter a valid 10-digit Indian phone number (e.g., +91 9876543210 or 9876543210)"
                                         className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none transition-colors"
                                         placeholder="+91 98765 43210"
                                         value={contact}

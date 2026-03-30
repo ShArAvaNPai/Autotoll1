@@ -20,24 +20,8 @@ import re
 
 import hashlib
 from dotenv import load_dotenv
-from supabase import create_client, Client
-
 # Load environment variables
 load_dotenv()
-
-# Initialize Supabase
-supabase_url = os.environ.get("SUPABASE_URL")
-supabase_key = os.environ.get("SUPABASE_KEY")
-supabase: Client | None = None
-
-if supabase_url and supabase_key:
-    try:
-        supabase = create_client(supabase_url, supabase_key)
-        print("Supabase client initialized")
-    except Exception as e:
-        print(f"Failed to initialize Supabase: {e}")
-else:
-    print("Supabase credentials not found in environment")
 
 # Import Database Models
 from database import SessionLocal, engine, init_db, Owner, Vehicle, Detection, Correction, Transaction, Admin
@@ -98,15 +82,14 @@ except Exception as e:
 def seed_admin():
     db = SessionLocal()
     try:
-        admin = db.query(Admin).filter(Admin.username == "Admin").first()
+        # Check if admin exists
+        admin = db.query(Admin).filter(Admin.username == "admin").first()
         if not admin:
-            # Default password: Admin@123
-            # SHA256 for simplicity as per requirements (in prod use bcrypt)
-            pwd_hash = hashlib.sha256("Admin@123".encode()).hexdigest()
-            new_admin = Admin(username="Admin", password_hash=pwd_hash)
+            pwd_hash = hashlib.sha256("admin".encode()).hexdigest()
+            new_admin = Admin(username="admin", password_hash=pwd_hash)
             db.add(new_admin)
             db.commit()
-            print("Seeded default Admin user.")
+            print("Seeded default admin user (admin/admin).")
     finally:
         db.close()
 
@@ -163,16 +146,7 @@ async def create_owner(
     db.commit()
     db.refresh(new_owner)
 
-    # Sync with Supabase (Owner)
-    if supabase:
-        try:
-            supabase.table("owners").insert({
-                "name": new_owner.name,
-                "contact_info": new_owner.contact_info,
-                "photo_path": new_owner.photo_path
-            }).execute()
-        except Exception as e:
-            print(f"Supabase Sync Error (Owner): {e}")
+
 
     return new_owner
 
@@ -197,30 +171,7 @@ def create_vehicle(
         db.add(new_vehicle)
         db.commit()
         db.refresh(new_vehicle)
-        
-        # Sync with Supabase 
-        if supabase:
-            try:
-                # We need the Supabase Owner ID to link. 
-                # This is complex if IDs diverge. 
-                # Workaround: For this "Sync" feature, we'll try to look up the owner in Supabase by name/contact first?
-                # Or simpler: Just insert the vehicle with owner_id = NULL if we can't link, or try to pass the local ID and hope they match 
-                # (risky if they don't start at same seed). 
-                # BETTER APPROACH: Upon creating owner in Supabase, we should store that mapping or just do a lookup.
-                # Given the constraints and likely fresh DBs, let's try to lookup owner by name/contact.
-                
-                # Fetch likely owner from supabase
-                sb_owner_res = supabase.table("owners").select("id").eq("contact_info", owner.contact_info).execute()
-                sb_owner_id = sb_owner_res.data[0]['id'] if sb_owner_res.data else None
-                
-                if sb_owner_id:
-                     supabase.table("vehicles").insert({
-                        "license_plate": new_vehicle.license_plate,
-                        "make_model": new_vehicle.make_model,
-                        "owner_id": sb_owner_id
-                    }).execute()
-            except Exception as e:
-                print(f"Supabase Sync Error (Vehicle): {e}")
+
 
         return new_vehicle
     except Exception as e:
@@ -251,6 +202,8 @@ async def update_vehicle(
     if name is not None:
         owner.name = name
     if contact_info is not None:
+        if not re.match(r"^(\+91[\-\s]?)?[0]?(91)?[6789]\d{9}$", str(contact_info).strip()):
+            raise HTTPException(status_code=400, detail="Contact must be a valid Indian phone number.")
         owner.contact_info = contact_info
     
     # Handle Photo Update
@@ -288,8 +241,7 @@ async def update_vehicle(
     db.refresh(vehicle)
     db.refresh(owner)
     
-    # Sync with Supabase if needed (omitted for brevity but recommended)
-    
+
     return {"status": "success", "owner": owner, "vehicle": vehicle}
 
 @app.delete("/api/vehicles/{vehicle_id}")
@@ -341,6 +293,9 @@ async def register_full(
     photo: UploadFile = File(None),
     db: Session = Depends(get_db)
 ):
+    if not re.match(r"^(\+91[\-\s]?)?[0]?(91)?[6789]\d{9}$", str(contact_info).strip()):
+        raise HTTPException(status_code=400, detail="Contact must be a valid Indian phone number.")
+
     # 1. Handle Photo Upload
     photo_path = ""
     if photo:
@@ -376,27 +331,7 @@ async def register_full(
         db.commit()
         db.refresh(new_owner)
         
-        # Sync to Supabase
-        if supabase:
-            try:
-                # 1. Insert Owner and get ID
-                owner_res = supabase.table("owners").insert({
-                    "name": new_owner.name,
-                    "contact_info": new_owner.contact_info,
-                    "photo_path": new_owner.photo_path
-                }).execute()
-                
-                sb_owner_id = owner_res.data[0]['id'] if owner_res.data else None
-                
-                # 2. Insert Vehicle linked to Owner
-                if sb_owner_id:
-                     supabase.table("vehicles").insert({
-                        "license_plate": new_vehicle.license_plate,
-                        "make_model": new_vehicle.make_model,
-                        "owner_id": sb_owner_id
-                    }).execute()
-            except Exception as e:
-                print(f"Supabase Sync Error (Register Full): {e}")
+
         
         return {"status": "success", "owner": new_owner, "vehicle": new_vehicle}
 

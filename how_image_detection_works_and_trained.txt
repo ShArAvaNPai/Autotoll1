@@ -1,0 +1,15 @@
+AutoToll AI - Image Detection and Training Architecture
+
+1. Image Detection Workflow (How it Works)
+- The system uses a fast, specialized edge-optimized pipeline for Automatic License Plate Recognition (ALPR).
+- Real-time vehicle images are captured via the toll booth camera (simulated in the UI) and sent to the FastAPI backend.
+- The image is processed by an object detection model (YOLOv8 nano or YOLOv9-tiny), which identifies the vehicle and isolates the bounding box of the license plate.
+- The isolated license plate crop is passed to an Optical Character Recognition (OCR) model tuned specifically for Indian license plates (e.g., global-plates-mobile-vit-v2).
+- The ALPR pipeline extracts the alphanumeric text, normalizes it (converting to uppercase and stripping whitespace), and cross-references it against the SQLite Database (`autotoll.db`) to identify the vehicle owner and deduct the toll amount.
+
+2. How the Data Was Trained
+- Data Collection: The foundational model was trained using thousands of annotated images featuring various vehicles under different lighting, angles, and weather conditions.
+- Annotation: Each license plate in the dataset was manually annotated with bounding boxes using computer vision tools (like Roboflow or CVAT) and labeled accurately.
+- Export & Formatting: The annotated dataset was exported into standard YOLOv8 format, consisting of an `images/` directory, a `labels/` directory, and a configuring `data.yaml` file defining the absolute paths and classes.
+- Training Process: Training was executed via `train.py` using the Ultralytics YOLO library. The process ran for multiple epochs (e.g., 50-100 epochs) using GPU acceleration. The model iteratively learned to reduce bounding box loss and improve confidence scores.
+- Optimization: The resulting highest-performing weight file (`best.pt`) was optimized and integrated directly into the `main.py` fast-alpr execution pipeline for low-latency inference at the toll gates.

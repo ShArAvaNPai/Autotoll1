@@ -8,5 +8,5 @@ opencv-python-headless
 sqlalchemy
 pandas
 openpyxl
-supabase
 python-dotenv
+onnxruntime

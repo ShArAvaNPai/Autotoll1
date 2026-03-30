@@ -15,18 +15,19 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-# Create venv if it doesn't exist
-if [ ! -d "venv" ]; then
-    echo -e "${GREEN}[Backend] Creating virtual environment...${NC}"
-    python3 -m venv venv
+# Use .venv if it exists, otherwise fall back to venv
+if [ -d ".venv" ]; then
+    VENV_DIR=".venv"
+elif [ -d "venv" ]; then
+    VENV_DIR="venv"
+else
+    echo -e "${RED}Error: No virtual environment found (.venv or venv). Please run:${NC}"
+    echo -e "${RED}  python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt${NC}"
+    exit 1
 fi
 
 # Activate venv
-source venv/bin/activate
-
-# Install dependencies
-echo -e "${GREEN}[Backend] Installing dependencies...${NC}"
-pip install -r backend/requirements.txt
+source "$VENV_DIR/bin/activate"
 
 # 2. Check & Setup Frontend
 echo -e "${GREEN}[Frontend] Checking Node.js environment...${NC}"

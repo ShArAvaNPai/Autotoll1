@@ -280,8 +280,7 @@ export function ScannerView({ onAnalyze, isAnalyzing, lastResult, lastScannedIma
 
           <div className="bg-zinc-900 rounded-xl p-5 border border-zinc-800 shadow-xl animate-in slide-in-from-bottom-4 duration-500 relative overflow-hidden">
 
-            {/* If blocked, blur the bg card */}
-            {localResult.balanceStatus === 'low_balance' && <div className="absolute inset-0 bg-black/50 backdrop-blur-sm z-10" />}
+            {/* Legacy Low Balance blur removed */}
 
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">

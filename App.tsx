@@ -24,7 +24,7 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentResult, setCurrentResult] = useState<AnalysisResult | null>(null);
   const [currentScanImage, setCurrentScanImage] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<'admin' | 'owner' | null>(null);
+  const [userRole, setUserRole] = useState<'admin' | 'owner' | null>('admin');
   const [showAdminTopUp, setShowAdminTopUp] = useState(false);
   // Default view is now 'monitor' since dashboard menu is an overlay
   const [currentView, setCurrentView] = useState<'monitor' | 'analytics' | 'settings' | 'registry' | 'history' | 'review' | 'realtime' | 'reports' | 'funds'>('monitor');

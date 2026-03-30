@@ -335,7 +335,7 @@ export function VehicleOwnerView({ onBack }: VehicleOwnerViewProps) {
                             </div>
 
                             {/* Activity Feed */}
-                            <div className="lg:col-span-8 flex flex-col space-y-6">
+                            <div className="lg:col-span-8 flex flex-col space-y-6 h-[800px]">
                                 <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl flex-1 flex flex-col overflow-hidden">
                                     <div className="p-8 border-b border-white/5 flex items-center justify-between">
                                         <div className="flex items-center gap-4">

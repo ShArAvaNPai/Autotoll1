@@ -21,8 +21,8 @@ export const ApprovalPanel: React.FC<ApprovalPanelProps> = ({ result, onApprove,
 
     if (!result) return null;
 
-    const isRegistered = result.ownerInfo?.isRegistered;
-    const balance = result.ownerInfo?.balance || 0;
+    const isRegistered = result.owner !== undefined;
+    const balance = result.owner?.balance || 0;
     const tollAmount = result.tollAmount || 0;
     const canDeduct = isRegistered && balance >= tollAmount;
 
@@ -76,7 +76,7 @@ export const ApprovalPanel: React.FC<ApprovalPanelProps> = ({ result, onApprove,
             {isRegistered ? (
                 <div className="mb-6 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                     <div className="flex justify-between items-center mb-1">
-                        <span className="text-sm text-blue-300 font-medium">{result.ownerInfo?.name}</span>
+                        <span className="text-sm text-blue-300 font-medium">{result.owner?.name}</span>
                         <span className={`text-lg font-bold ${canDeduct ? 'text-emerald-400' : 'text-red-400'}`}>
                             ₹{balance.toFixed(2)}
                         </span>

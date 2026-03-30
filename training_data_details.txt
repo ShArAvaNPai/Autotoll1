@@ -1,0 +1,25 @@
+DATA USED FOR TRAINING, VALIDATION, AND TESTING
+===============================================
+
+PROJECT: AutoToll AI - Automated Toll Collection System
+
+The AI model implemented in this project (YOLOv8) was specifically fine-tuned using a customized dataset composed of vehicle license plates, structured within the `synthetic_plates` dataset directory.
+
+1. Dataset Description:
+The custom dataset was configured in the standard YOLOv8 format (`data.yaml`). It involves raw images alongside corresponding annotation text files. These annotations provide normalized bounding box coordinates that precisely isolate and classify the Region of Interest (ROI)—namely, the vehicle license plates.
+
+2. Training Data (Train):
+- Size: 100 images
+- Purpose: The training set is the primary learning resource for the AI. During the training loop, the YOLOv8 algorithm feeds on these 100 images to gradually learn the nuanced visual characteristics, geometric shapes, fonts, and contrasting patterns of license plates. The neural network optimizes its parameters (weights and biases) to accurately predict the bounding box locations by minimizing the training loss across multiple epochs.
+
+3. Validation Data (Val):
+- Size: 20 images
+- Purpose: The validation set serves as an impartial checkpoint during the active training process. At the end of every epoch, the model evaluates its current intelligence against these 20 completely unseen images. This critical step calculates performance metrics (like Precision, Recall, and mean Average Precision (mAP)) and ensures the model is actually generalizing its knowledge rather than just memorizing the training set (a phenomenon known as overfitting). It is also the primary metric used to save the "best" model weights (`best.pt`).
+
+4. Testing Data (Test):
+- Size: 0 images (No dedicated isolated test directory)
+- Purpose: In the current directory layout, a formally isolated test split was not used for automated testing scripts. The real-world evaluation instead hinges on the validation set's rigorous checks combined with manual, real-world inference tests (using fresh, live pictures from webcams or uploads to the AutoToll web interface) to evaluate the end-to-end processing pipeline, including the EasyOCR sequence.
+
+Model Information & Architecture:
+- Base Pre-trained Model: The system utilizes Transfer Learning, building upon the highly efficient YOLOv8 Nano architecture (`yolov8n.pt`). This allows for lightning-fast training convergence and powerful feature extraction even with a combined dataset size of only 120 images.
+- Labeled Classes: The dataset targets exactly 1 class ID (0: 'license_plate'), keeping the localization engine targeted, lightweight, and suitable for rapid server/backend inferencing.
